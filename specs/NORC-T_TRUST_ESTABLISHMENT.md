@@ -1,5 +1,7 @@
 # NORC-T: Trust Establishment Protocol Specification  
-## Version 1.0
+## Version 1.1 (Academic Alignment Draft)
+
+This trust layer specification is updated to reflect formalized handshake & security goals in the master spec v1.1 (Sections 3 & 7). Citations `[1]–[14]` reside in `REFERENCES.md`. Core message schemas remain backward compatible under AMC; additional transcript considerations apply when hybrid PQ artifacts are present.
 
 ---
 

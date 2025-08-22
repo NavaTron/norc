@@ -1,7 +1,9 @@
-# NORC Security & Threat Model
+# NORC Security & Threat Model (Academic Revision)
 
-Version: 1.0 (Aligned with Protocol Specification 1.0 + Security Enhancements Draft)
-Status: Draft
+Version: 1.1 (Aligned with Protocol Specification 1.1)  
+Status: Draft for Peer Review
+
+This revision introduces formal mapping to academic and standards references ([1]–[14] in `REFERENCES.md`), clarifies Key Compromise Impersonation (KCI) and Unknown Key Share (UKS) resistance, and adds guidance for optional Post‑Compromise Security (PCS) via a symmetric ratchet. Hybrid post‑quantum key establishment rationale is updated per NIST PQC selections ([5][13]).
 
 ---
 ## 1. Scope
@@ -44,14 +46,14 @@ MAY: Deniability (disabled when compliance mode active), Advanced Anonymity.
 | HKDF | HKDF-BLAKE3 | Simplified context separation |
 
 ## 6. Handshake & Transcript Binding
-All negotiation messages are canonically serialized; transcript hash binds ordered messages + advertised version/cipher lists. Master secret derived via HKDF-BLAKE3 over (ECDH || optional PQ secret). Enforces highest mutual version & suite (AMC). Downgrade attempt => abort.
+All negotiation messages are canonically serialized; transcript hash `th` binds their ordered, byte‑exact encodings (cf. TLS 1.3 transcript binding [4][12]). Master secret derived via HKDF-BLAKE3 over classical ECDH (X25519) concatenated with optional PQ KEM secret (Kyber) ([5][13]). Highest mutual version & suite enforcement yields downgrade resistance. Any attempt to alter ordering or remove higher precedence options MUST abort.
 
 ## 7. Replay & Ordering Defense
-- Per-session sequence_number, random offset
-- Sliding window (≥1024)
-- prev_message_hash chain (BLAKE3-256)
-- Federation relay cache (TTL >=10m, ≤24h)
-- Timestamp skew bound (≤300s clients, ≤60s federation) unless chain continuity proves legitimacy
+- Per‑session `sequence_number` (random 24‑bit offset start)
+- Sliding window (≥1024; ≥4096 for federation as of v1.1 enhancement)
+- `prev_message_hash` chain (BLAKE3-256) forming linear hash chain
+- Federation relay cache (TTL ≥10m, ≤24h)
+- Timestamp skew bound (≤300s clients, ≤60s federation) unless hash chain continuity justifies acceptance
 
 ## 8. AEAD AAD Schema
 ```
@@ -72,10 +74,10 @@ Mismatch => discard silently + increment local error counters.
 Creation local; rotation ≤180d; revocation via signed device_revoke; overlap window for dual addressing. Escrow optional (passphrase wrapped). Session keys ephemeral; per-message content keys random & wrapped per recipient.
 
 ## 10. Algorithm Agility
-Cipher suite registry; negotiation selects highest mutual; transcript binds lists. Hybrid PQ suites concatenate classical + PQ shared secrets before HKDF.
+Cipher suite registry; negotiation selects highest mutual; transcript binds ordered lists. Hybrid PQ suites concatenate classical + PQ shared secrets before HKDF (ordering fixed: classical || PQ). Domain separation labels `norc:*` REQUIRED for all HKDF contexts (new normative requirement v1.1) ([3][4]).
 
 ## 11. Privacy & Metadata Minimization
-Encrypted file manifest conceals filenames/MIME/true size; padding to power-of-two buckets ≤64KB; batched ACKs; random presence jitter 0–3s; generic errors prevent enumeration.
+Encrypted file manifest conceals filenames/MIME/true size; padding to power‑of‑two buckets ≤64KB. Optional adaptive padding (probabilistic multiplier set) further reduces deterministic size leakage ([6]). Batched ACKs; random presence jitter 0–3s; generic errors prevent enumeration.
 
 ## 12. Rate Limiting (Baseline)
 Messages 60/min (burst 120); key lookups 30/min; registrations 3/hour; federation 1000 msgs/min & 100MB/5min/remote. Exceed → ERR_RATE_LIMIT (retry_after).
@@ -89,15 +91,18 @@ Hash chain (Merkle-like) over canonical entries; daily root hash publication rec
 ## 15. Supply Chain Attestation
 Build attestation & SBOM hashes optionally advertised; clients enforce policy where mandated (e.g., gov/defense deployments).
 
-## 16. Threat Mitigations Matrix
-| Threat | Mitigation |
-|--------|-----------|
-| Network replay | Sequence numbers + sliding window + timestamps + hash chain |
-| Downgrade | Transcript binding + highest mutual enforcement |
-| Key compromise (device) | Rotation policy + revocation broadcast |
-| Metadata leakage (file) | Encrypted manifest + padding |
-| Harvest-now, decrypt-later | Optional Kyber hybrid suites |
-| Log tampering | Hash-chained audit log roots |
+## 16. Threat Mitigations Matrix (Updated v1.1)
+| Threat | Primary Mitigation | References |
+|--------|--------------------|------------|
+| Network replay | Sequence window + hash chain + relay cache | [3][4] |
+| Downgrade | Transcript binding + ordered list hash | [4][12] |
+| Key compromise (device) | Rotation + revocation + optional PCS ratchet | [1][7] |
+| KCI attack | Identity + ephemeral binding in transcript | [7][8] |
+| UKS attack | Explicit peer identity in canonical forms | [8][9] |
+| Metadata leakage (files) | Encrypted manifest + length padding | Section 11 |
+| Harvest-now, decrypt-later | Hybrid KEM (Kyber) concatenation | [5][13] |
+| Log tampering | Hash-chained audit roots + optional publication | [14] |
+| Traffic analysis (size) | Power-of-two + adaptive probabilistic padding | [6] |
 
 ## 17. Residual Risks
 - Traffic analysis (size/timing patterns) partially mitigated only
@@ -105,12 +110,13 @@ Build attestation & SBOM hashes optionally advertised; clients enforce policy wh
 - Federation trust misconfiguration could broaden metadata exposure
 - PQ algorithms future cryptanalysis risk (monitor standards updates)
 
-## 18. Migration Guidance
-1. Enable optional tracking of sequence numbers & prev_message_hash (tolerate absence)
-2. Adopt encrypted file manifests; cease logging filenames
-3. Implement transcript hashing before rolling out stricter downgrade aborts
-4. Introduce hybrid suites behind feature flag; monitor performance
-5. Begin publishing daily audit log root hashes
+## 18. Migration Guidance (1.0 → 1.1)
+1. Enforce domain separation labels for all HKDF invocations (`norc:*`).
+2. Increase federation replay window to ≥4096 entries.
+3. Integrate hybrid PQ suites (classical || PQ) with strict abort on PQ failure (no silent downgrade).
+4. Optional: Deploy PCS ratchet for high classification conversations.
+5. Adopt adaptive padding strategy once performance overhead assessed.
+6. Begin daily publication of audit root hashes (transparency).
 
 ## 19. Future Work
 - Group messaging tree-based key management (MLS-like) integration
@@ -119,4 +125,4 @@ Build attestation & SBOM hashes optionally advertised; clients enforce policy wh
 - Automated policy-driven trust revalidation
 
 ---
-Document Hash (BLAKE3): TBD (compute post-publication)
+Document Hash (BLAKE3): TBD (compute post‑publication)

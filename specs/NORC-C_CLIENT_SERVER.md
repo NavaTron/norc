@@ -1,5 +1,7 @@
 # NORC-C: Client-Server Protocol Specification
-## Version 1.0
+## Version 1.1 (Academic Alignment Draft)
+
+This document aligns the client‑server layer with the academic restructuring of the master NORC Specification v1.1. Section numbering herein is local; security properties and formal handshake model are defined centrally (master spec Section 3). References `[1]–[14]` are cataloged in `REFERENCES.md`.
 
 ---
 

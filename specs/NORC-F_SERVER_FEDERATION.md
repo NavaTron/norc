@@ -1,5 +1,7 @@
 # NORC-F: Server-Server Federation Protocol Specification
-## Version 1.0
+## Version 1.1 (Academic Alignment Draft)
+
+Aligned with master NORC Specification v1.1. Formal security objectives, replay / ordering definitions, and hybrid PQ guidance are inherited from Sections 3 and 7 of the master spec. Local section numbers remain unchanged for backward reference. Citations `[1]–[14]` in `REFERENCES.md`.
 
 ---
 

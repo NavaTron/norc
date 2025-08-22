@@ -1,24 +1,39 @@
 # NORC Protocol Specification
-## NavaTron Open Real-time Communication Protocol
+## NavaTron Open Real-time Communication Protocol (Academic Revision)
 
-**Version:** 1.0  
-**Date:** August 22, 2025  
-**Status:** Draft
+**Version:** 1.1 (Academic Structuring & Security Hardening)  
+**Revision Date:** August 22, 2025  
+**Supersedes:** 1.0 (retained for historical comparison)  
+**Status:** Draft for Peer Review
+
+### Abstract
+This academic revision restructures NORC into a formal specification style adding explicit security goals, threat alignment, and cryptographic rationale referencing contemporary protocols (Signal Double Ratchet [1], MLS [2], Noise [3], TLS 1.3 [4], NIST PQC guidance [5]). It introduces formal handshake notation, clarifies downgrade / replay / KCI / UKS resistance, defines optional post‑compromise security (PCS) ratchets, and strengthens hybrid post‑quantum integration. Metadata minimization and trust governance are preserved while adding domain separation labels and advisory padding strategies.
+
+### Keywords
+End‑to‑End Encryption; Forward Secrecy; Post‑Compromise Security; Federation; Trust Management; Post‑Quantum Hybrid; Transcript Binding; Replay Resistance; Metadata Minimization.
+
+### Document Conventions
+Normative keywords **MUST**, **SHOULD**, **MAY** per RFC 2119 / 8174. Concatenation `||`; hash `H()` = BLAKE3 unless stated; HKDF as extract+expand `HKDF(salt, ikm, info, L)`; AEAD seal/open `AEAD_enc/AEAD_dec`; XOR `⊕`. Canonical serialization is deterministic and injective; mismatch MUST abort. Security claims qualitative unless otherwise noted.
 
 ---
 
-## Table of Contents
+## Table of Contents (Partially Renumbered – Legacy Sections Retained)
 
-1. [Introduction](#introduction)
-2. [Architecture Overview](#architecture-overview)
-3. [NORC-C: Client-Server Protocol](#norc-c-client-server-protocol)
-4. [NORC-F: Server-Server Federation Protocol](#norc-f-server-server-federation-protocol)
-5. [NORC-T: Trust Establishment Protocol](#norc-t-trust-establishment-protocol)
-6. [Security Considerations](#security-considerations)
-7. [Implementation Guidelines](#implementation-guidelines)
-8. [Message Formats](#message-formats)
-9. [Error Handling](#error-handling)
-10. [Compliance and Extensions](#compliance-and-extensions)
+0. [Document Conventions](#document-conventions)  
+1. [Introduction](#1-introduction)  
+2. [Architecture Overview](#2-architecture-overview)  
+3. (Planned) Core Formal Model (to be merged in subsequent patch)  
+4. [NORC-C: Client-Server Protocol](#3-norc-c-client-server-protocol)  
+5. [NORC-F: Server-Server Federation Protocol](#4-norc-f-server-server-federation-protocol)  
+6. [NORC-T: Trust Establishment Protocol](#5-norc-t-trust-establishment-protocol)  
+7. [Security Considerations](#6-security-considerations)  
+8. [Implementation Guidelines](#7-implementation-guidelines)  
+9. [Message Formats](#8-message-formats)  
+10. [Error Handling](#9-error-handling)  
+11. [Compliance and Extensions](#10-compliance-and-extensions)  
+12. Security Enhancements Added in 1.1 (forthcoming)  
+13. References  
+14. Appendix A (Compatibility Notes)
 
 ---
 
@@ -125,7 +140,51 @@ Consistency of naming reduces translation logic between versions and simplifies 
 
 ---
 
-## 3. NORC-C: Client-Server Protocol
+## 3. Core Model & Formal Notation
+
+This section is newly introduced in version 1.1 to formalize previously implicit properties.
+
+### 3.1 Roles and Long-Term / Ephemeral Material
+Let a client device be `C`, server `S`. Identity key pairs (Ed25519) are `(IKc_pk, IKc_sk)` and `(IKs_pk, IKs_sk)`. Ephemeral X25519 pairs `(EKc_pk, EKc_sk)`, `(EKs_pk, EKs_sk)` are freshly generated per session. Optional hybrid post‑quantum (PQ) KEM public keys `(PQc_pk, PQs_pk)` (e.g., Kyber768 [5][13]) produce a shared secret `ss_pq` via encapsulation/decapsulation.
+
+### 3.2 Handshake Transcript (Simplified Message Sequence)
+1. `ClientHello`: versions list `V_c`, capability list `Cap_c` (ordered), nonce `Nc`, `EKc_pk`, optional `PQc_pk`.
+2. `ServerHello`: selection `v* = max(V_c ∩ V_s)` under AMC, ordered `Cap_s`, nonce `Ns`, `EKs_pk`, optional `PQs_pk`.
+3. Transcript hash: `th = H( canonical(ClientHello) || canonical(ServerHello) )`.
+4. Shared secret derivation:
+    - Classical: `ss_ecdh = DH(EKc_sk, EKs_pk)`.
+    - Hybrid (if negotiated): `ss = ss_ecdh || ss_pq` else `ss = ss_ecdh`.
+5. Master secret: `ms = HKDF(Nc || Ns, ss, "norc:ms:v1" || th, 32)`.
+6. Directional traffic keys: `k_c2s = HKDF(ms, 0, "norc:tk:c2s:v1", 32)`, `k_s2c = HKDF(ms, 0, "norc:tk:s2c:v1", 32)`.
+7. Authentication: Signatures over `th || role_id` MAY be exchanged (policy dependent) to bind identity keys (similar to SIGMA pattern [8]) when regulatory mode requires explicit server authentication beyond mTLS.
+
+### 3.3 Security Objectives (Qualitative)
+For a PPT adversary with full network control and delayed key compromise:
+| Objective | Mechanism | References |
+|-----------|-----------|-----------|
+| Authenticated Key Exchange | Transcript binding + identity binding | [3][4][8] |
+| Forward Secrecy | Ephemeral X25519 + per‑message content keys | [1][3][4] |
+| Post‑Compromise Security (optional) | Application symmetric ratchet (Section 12.1) | [1][2] |
+| Downgrade Resistance | Ordered list hashing into `th` | [4][12] |
+| Replay Resistance | Nonces + sequence window ≥1024 (≥4096 federation) + hash chain | Section 7 |
+| KCI Resistance | Both parties’ ephemeral keys & transcript hash bound | [7][8] |
+| UKS Resistance | Peer identity explicitly included in canonical forms | [8][9] |
+| Harvest‑Now Mitigation | Hybrid PQ KEM concatenation | [5][13] |
+| Metadata Minimization | Encrypted manifests + padding strategy | Section 7 |
+
+### 3.4 State Machine
+`INIT → NEGOTIATING → ESTABLISHED → CLOSING → CLOSED`. Any unexpected message outside the permitted transition MUST abort with protocol error (Section 10).
+
+### 3.5 Key Schedule Domain Separation
+All HKDF invocations MUST use labels beginning with `"norc:"` to avoid cross‑protocol collisions. Failure to recognize a label MUST abort.
+
+### 3.6 Comparison to Prior Art
+NORC reuses reviewed constructions rather than novel primitives: AEAD and transcript binding from TLS 1.3 ([4]); optional double ratchet semantics from Signal ([1]); prospective group scalability roadmap referencing MLS ([2]); Noise pattern inspiration for message ordering ([3]); hybrid PQ rationale per NIST process ([5]).
+
+### 3.7 Notation Legend
+`||` concatenation; `H()` default BLAKE3 [14]; `HKDF()` per [4]; `AEAD_enc_k(nonce, aad, pt)`; `AEAD_dec`. UUIDs are 128‑bit; timestamps are Unix epoch (microseconds where specified).
+
+## 4. NORC-C: Client-Server Protocol
 
 ### 3.1 Transport Layer
 
@@ -274,7 +333,7 @@ For forward secrecy, NORC uses X25519 key exchange for ephemeral session keys:
 
 ---
 
-## 4. NORC-F: Server-Server Federation Protocol
+## 5. NORC-F: Server-Server Federation Protocol
 
 ### 4.1 Transport Layer
 
@@ -398,7 +457,7 @@ Each server has a unique server identity and maintains a certificate:
 
 ---
 
-## 5. NORC-T: Trust Establishment Protocol
+## 6. NORC-T: Trust Establishment Protocol
 
 ### 5.1 Trust Models
 
@@ -474,7 +533,7 @@ NORC-T supports multiple trust establishment models:
 
 ---
 
-## 6. Security Considerations
+## 7. Security Considerations
 
 ### 6.1 Cryptographic Requirements
 
@@ -677,7 +736,7 @@ File manifests (filenames, MIME types, original length) encrypted as a `file_man
 
 ---
 
-## 7. Implementation Guidelines
+## 8. Implementation Guidelines
 
 ### 7.1 Adjacent-Major Compatibility Implementation
 
@@ -815,7 +874,7 @@ parse_norc_message(<<Type:8, Length:32, Payload:Length/binary, Rest/binary>>) ->
 
 ---
 
-## 8. Message Formats
+## 9. Message Formats
 
 ### 8.1 Binary Wire Format (v2)
 
@@ -888,7 +947,7 @@ For easier debugging and non-Erlang implementations, NORC also supports JSON ove
 
 ---
 
-## 9. Error Handling
+## 10. Error Handling
 
 ### 9.1 Error Categories
 
@@ -922,7 +981,36 @@ For easier debugging and non-Erlang implementations, NORC also supports JSON ove
 
 ---
 
-## 10. Compliance and Extensions
+## 11. Compliance and Extensions
+
+## 12. Security Enhancements Added in 1.1
+
+| Enhancement | Summary | Sections | Rationale |
+|-------------|---------|----------|-----------|
+| Formal Core Model | Added explicit handshake, key schedule, objectives | 3 | Clarity & auditability |
+| Domain Separation Labels | Mandatory `norc:` labels for HKDF contexts | 3.5 | Prevent cross‑use /
+| Hybrid PQ Clarification | Order & abort semantics on PQ failure | 3.2, 7.14 | Harvest‑now mitigation [5][13] |
+| Replay Window Guidance | Federation min window raised to 4096 | 7.6 | Burst replay safety |
+| Optional PCS Ratchet | Post‑compromise recovery guidance | 12.1 | Advanced threat resilience [1][2] |
+| Traffic Analysis Padding Advisory | Probabilistic bucket selection | 7.15, 12.3 | Size correlation reduction [6] |
+| KCI / UKS Explicitness | Objectives table + transcript binding emphasis | 3.3 | Hardening vs impersonation [7][8][9] |
+| Logging Minimization | Pseudonymization normative language | 7.18 | Privacy principle |
+| Hash Agility Note | Future alternate hash negotiation placeholder | 12 | Long‑term agility |
+
+### 12.1 Post‑Compromise Security (PCS) Ratchet (Optional)
+Implementations MAY layer a symmetric double ratchet over base session keys. Base root `R0 = ms`; per message derive `R_{i+1} = HKDF(R_i, 0, "norc:ratchet:root:v1", 32)`; content key `CK_i = HKDF(R_i, 0, "norc:ratchet:ck:v1", 32)`. Discard `R_i` after derivation (forward secrecy & PCS). Out of order handling left to application buffering.
+
+### 12.2 Memory Hygiene Recommendations
+Zero ephemeral secrets post‑use; use constant‑time comparisons for tags; lock pages for long‑term keys where platform permits.
+
+### 12.3 Adaptive Padding Advisory
+Probability set P = {1.0, 1.3, 1.6, 2.0}; choose multiplier m = PRF_k(message_index) mod |P|; pad ciphertext length L to ceil(L*m) then bucket to nearest power‑of‑two ≤64KB. MUST NOT leak chosen multiplier in metadata.
+
+## 13. References
+See `REFERENCES.md` for numbered citations.
+
+## Appendix A: Backward Compatibility Notes
+Legacy 1.0 implementations encountering unknown fields ignore them per AMC. When a 1.1 capability is present the transcript hash definition expands; mixed canonicalization MUST NOT occur.
 
 ### 10.1 Audit Requirements
 
