@@ -475,6 +475,158 @@ Messages can be tagged with classification levels:
 
 Servers MUST enforce appropriate handling based on classification.
 
+### 6.5 Threat Model
+
+**Primary Assets**: Encrypted message payloads, minimized metadata, device long‑term keys, ephemeral session keys, trust certificates, federation routing integrity, user presence privacy, file metadata, version/cipher negotiation integrity, audit log integrity.
+
+**Actors**:
+- Legitimate clients/devices (honest) & honest‑but‑curious servers
+- Malicious external network attacker (passive + active MITM)
+- Compromised / malicious federation server
+- Insider with limited log/audit access
+- Future quantum adversary (harvest‑now, decrypt‑later)
+
+**Assumptions**:
+- TLS 1.3 (mTLS where applicable) protects transport until NORC layered keys established
+- Ed25519 / X25519 / ChaCha20‑Poly1305 / BLAKE3 remain secure; secure RNG available
+- Time skew bounded (≤5s client↔server, ≤60s inter‑server) or compensated via signed time sync
+
+**Security Goals (MUST)**:
+1. Confidentiality & integrity of end‑to‑end payloads
+2. Forward secrecy (session & per‑message) and hybrid PQ option
+3. Replay detection at client, session & federation layers
+4. Downgrade resistance (version & cipher suites)
+5. Minimal metadata exposure (no plaintext filenames, limited presence granularity)
+6. Authentic revocation (device & trust)
+7. Audit integrity without leaking plaintext
+
+**Non‑Goals (MAY)**: Full traffic analysis resistance, anonymity from the home server, perfect plausible deniability in compliance/audit modes.
+
+### 6.6 Replay Protection
+
+Layered controls:
+1. Per‑session 64‑bit `sequence_number` starting at random 24‑bit offset
+2. Receiver sliding bitmap window (≥1024) rejects duplicates/out‑of‑window
+3. Federation relay cache of `{origin_server, message_id}` & `{origin_server, sequence_number}` with TTL = max(message_TTL, 600s) capped at 24h
+4. Handshake nonces (96‑bit) + transcript hashing (6.8) prevent replays of negotiation
+5. Timestamp freshness: reject if |local_time − message_time| > 300s unless offline‑delivery extension permits (bounded ≤24h with hash chain continuity)
+
+### 6.7 Ordering & Hash Chaining
+
+Each encrypted message (except the first in a chain) includes:
+- `sequence_number`
+- `prev_message_hash` = BLAKE3‑256(canonical ciphertext of previous accepted message)
+- Optional `chain_depth` for rapid consistency verification
+
+Gap ⇒ MAY request retransmit; hash mismatch ⇒ MUST discard & flag integrity alert (no explicit protocol error to attacker).
+
+### 6.8 Downgrade Resistance & Transcript Binding
+
+Negotiation transcripts hash all ordered canonical handshake structures:
+```
+transcript_hash = BLAKE3( label || concat( canonical(handshake_msg_i) ) )
+```
+Key derivation:
+```
+master_secret = HKDF-BLAKE3( ikm = ecdh_secret || optional_pq_secret,
+                                                         salt = client_nonce || server_nonce,
+                                                         info = negotiated_version || cipher_suite || transcript_hash )
+```
+Abort if negotiated version < max(mutual_compatible_versions) (AMC) or chosen cipher suite not highest mutually preferred.
+
+### 6.9 Canonical Serialization
+
+Used for signatures / hashes:
+- JSON debug: UTF‑8, sorted keys, no extraneous whitespace, base64url (no padding) for binary
+- Binary: fixed field order; absent optional fields omitted; big‑endian length prefixes
+`canonical_message` = exact serialized form pre‑encryption (excluding transport framing).
+
+### 6.10 AEAD Additional Authenticated Data (AAD)
+
+Structure (binary, fixed order):
+```
+struct AAD_v1 {
+    uint8  proto_major;
+    uint8  proto_minor;
+    uint8  message_type;      // registry code
+    uint64 sequence_number;   // 0 if not yet sequenced
+    uint128 message_id;       // UUID bits
+    uint32 ciphertext_length; // bytes
+    bytes32 prev_message_hash;// zeroes for first message
+    bytes32 transcript_hash;  // zeroes for non-handshake
+}
+```
+AEAD verification failure ⇒ silent discard + local error counter.
+
+### 6.11 Key Wrapping & Derivation
+
+Per message:
+1. Generate 256‑bit `content_key`
+2. For each recipient device: ephemeral X25519 (or hybrid X25519+Kyber) → shared secret
+3. `wrap_key = HKDF-BLAKE3(shared_secret, salt=BLAKE3(content_key)[0..31], info="norc:wrap:v1"||version||device_id, 32)`
+4. `wrapped_content_key = ChaCha20-Poly1305(seal, wrap_key, nonce=first_96_bits(BLAKE3(device_id||message_id)), aad=AAD_meta, plaintext=content_key)`
+5. Store `encrypted_keys[device_id] = wrapped_content_key`
+
+Session establishment replaces `message_id` with `session_id` & label `"norc:session:v1"`.
+
+### 6.12 Device Key Lifecycle
+
+Rotation ≥ every 180 days or on compromise; overlap window permits dual addressing. Revocation via signed `device_revoke` including reason & effective timestamp. Pre‑rotate ≥7 days before expiry. Optional escrow MUST be passphrase‑wrapped (Argon2id) and never silently imported.
+
+### 6.13 Algorithm Agility & Cipher Suites
+
+```
+Suite | Sig        | KEM/ECDH            | AEAD                | Hash/KDF
+------+------------+---------------------+---------------------+---------
+0001  | Ed25519    | X25519              | ChaCha20-Poly1305   | BLAKE3
+0002  | ECDSA P-256| X25519              | AES-256-GCM         | SHA-256
+0101  | Ed25519    | X25519 + Kyber768   | ChaCha20-Poly1305   | BLAKE3
+```
+Highest mutually supported (respecting AMC) selected; transcript binds advertisement order.
+
+### 6.14 Post‑Quantum Hybrid (Optional)
+
+Hybrid suites concatenate classical & PQ shared secrets before HKDF. PQ public key & ciphertext accompany handshake; failure to validate PQ part falls back only if policy allows.
+
+### 6.15 Privacy Padding & Traffic Shaping
+
+Ciphertexts padded to next power‑of‑two bucket (≤64KB). Presence updates MAY be delayed randomly (0–3s). Low‑priority ACKs MAY batch ≤100ms. Errors use generic messages to prevent enumeration.
+
+### 6.16 Rate Limiting (Baseline)
+
+Per device defaults (MAY tighten): messages 60/min (burst 120), key lookups 30/min, registrations 3/hour. Federation ingress per remote: 1000 msgs/min & 100 MB/5 min. Exceed ⇒ `ERR_RATE_LIMIT` with `retry_after`.
+
+### 6.17 Time Synchronization
+
+Signed `time_sync` gives server time & uncertainty. Acceptable skew: auth ≤5s; federation delay tolerance ≤60s. Servers SHOULD use authenticated NTP or Roughtime.
+
+### 6.18 Logging & Audit Integrity
+
+Audit log entries chained: `entry_hash = BLAKE3(prev_hash || canonical_entry)`. Daily root hash MAY be published (transparency). No plaintext message content or private keys; user IDs HMAC‑pseudonymized.
+
+### 6.19 Supply Chain Integrity
+
+Servers SHOULD advertise build attestation (e.g., Sigstore) hash; clients MAY enforce policy.
+
+### 6.20 File Metadata Confidentiality
+
+File manifests (filenames, MIME types, original length) encrypted as a `file_manifest` message (Section 8) before upload; server only sees padded chunk sizes & ID.
+
+### 6.21 Security Property Summary
+
+| Property | Mechanism |
+|----------|-----------|
+| Replay Protection | Sequence numbers + sliding window + relay cache |
+| Ordering Integrity | Hash chain (`prev_message_hash`) |
+| Downgrade Resistance | Transcript hash + highest mutual enforcement |
+| Forward Secrecy | Ephemeral X25519 (optional PQ hybrid) |
+| Confidentiality | AEAD (ChaCha20-Poly1305 / AES-GCM) |
+| Metadata Minimization | Encrypted manifest + padding + batching |
+| Algorithm Agility | Cipher suite negotiation registry |
+| Key Lifecycle | Rotation & signed revocation messages |
+| Supply Chain Integrity | Build attestations |
+| Audit Integrity | Merkle-like hash chaining |
+
 ---
 
 ## 7. Implementation Guidelines
@@ -484,32 +636,36 @@ Servers MUST enforce appropriate handling based on classification.
 #### 7.1.1 Version Negotiation Algorithm
 
 ```erlang
-%% Version compatibility checking
--spec is_compatible(Version1 :: binary(), Version2 :: binary()) -> boolean().
+%% AMC compatibility: adjacent major versions (|Δ| ≤ 1)
+-spec is_compatible(binary(), binary()) -> boolean().
 is_compatible(V1, V2) ->
-    {Major1, Minor1} = parse_version(V1),
-    {Major2, Minor2} = parse_version(V2),
-    
-    %% AMC Rule: Adjacent major versions are compatible
-    abs(Major1 - Major2) =< 1.
+    {Maj1, _} = parse_version(V1),
+    {Maj2, _} = parse_version(V2),
+    abs(Maj1 - Maj2) =< 1.
 
-%% Find highest compatible version
-negotiate_version(ClientVersions, ServerVersions) ->
-    Compatible = [V || V1 <- ClientVersions, 
-                      V2 <- ServerVersions, 
-                      is_compatible(V1, V2), V <- [V1, V2]],
-    case Compatible of
-        [] -> {error, no_compatible_version};
-        Versions -> 
-            Highest = lists:max(Versions),
-            {ok, Highest}
+%% Negotiate highest non-downgraded version; return chosen + original lists for transcript binding
+-spec negotiate_version([binary()], [binary()]) -> {ok, binary(), [binary()], [binary()]} | {error, term()}.
+negotiate_version(ClientPref, ServerPref) ->
+    Exact = [V || V <- ClientPref, lists:member(V, ServerPref)],
+    case Exact of
+        [BestExact | _] -> {ok, BestExact, ClientPref, ServerPref};
+        [] ->
+            Compat = [V || V <- ClientPref,
+                           lists:any(fun(SV) -> is_compatible(V, SV) end, ServerPref)],
+            case Compat of
+                [] -> {error, no_compatible_version};
+                _  ->
+                    Highest = lists:last(lists:sort(Compat)),
+                    {ok, Highest, ClientPref, ServerPref}
+            end
     end.
 
-%% Version parsing helper
 parse_version(<<"v", Rest/binary>>) -> parse_version(Rest);
 parse_version(VersionBin) ->
-    [MajorBin, MinorBin | _] = binary:split(VersionBin, <<".">>, [global]),
-    {binary_to_integer(MajorBin), binary_to_integer(MinorBin)}.
+    case binary:split(VersionBin, <<".">>, [global]) of
+        [Maj, Min] -> {binary_to_integer(Maj), binary_to_integer(Min)};
+        [Maj, Min | _] -> {binary_to_integer(Maj), binary_to_integer(Min)}
+    end.
 ```
 
 #### 7.1.2 Compatibility Mode Handling
@@ -613,22 +769,24 @@ parse_norc_message(<<Type:8, Length:32, Payload:Length/binary, Rest/binary>>) ->
 
 ## 8. Message Formats
 
-### 8.1 Binary Wire Format
+### 8.1 Binary Wire Format (v2)
 
-NORC messages use a compact binary format optimized for Erlang:
+Includes sequencing & hash chaining fields:
 
 ```
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
-│     Version     │     Type      │           Length              │
+│  Ver  │   Type    │            Length (ciphertext)            │
 ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
-│                          Message ID                             │
+│                          Message ID (128)                     │
 ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
-│                                                                 │
-├─                         Payload                               ─┤
-│                                                                 │
-└─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘
+│                      Sequence Number (64)                     │
+├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
+│                   Prev Message Hash (256 bits)                │
+├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤
+│                         Ciphertext …                          │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ### 8.2 JSON Alternative
@@ -644,12 +802,15 @@ For easier debugging and non-Erlang implementations, NORC also supports JSON ove
 -define(MSG_DEVICE_REGISTER,        16#02).  % Renamed from 16#01
 -define(MSG_AUTH_REQUEST,           16#03).  % Renamed from 16#02
 -define(MSG_AUTH_RESPONSE,          16#04).  % Renamed from 16#03
+-define(MSG_DEVICE_REVOKE,          16#05).  % Device key revocation
 -define(MSG_MESSAGE_SEND,           16#10).
 -define(MSG_MESSAGE_ACK,            16#11).
 -define(MSG_PRESENCE_UPDATE,        16#20).
 -define(MSG_KEY_REQUEST,            16#30).
 -define(MSG_KEY_RESPONSE,           16#31).
 -define(MSG_SESSION_KEY_EXCHANGE,   16#32).
+-define(MSG_TIME_SYNC,              16#33).  % Signed time synchronization
+-define(MSG_FILE_MANIFEST,          16#40).  % Encrypted file metadata manifest
 
 %% NORC-F Message Types (Version-aware)
 -define(MSG_FEDERATION_HELLO,       16#70).  % New: Version negotiation

@@ -707,3 +707,17 @@ decode_federation_stream(Partial) ->
 ---
 
 This specification defines the complete NORC-F protocol for server-to-server federation, enabling secure and efficient communication across organizational boundaries while maintaining the security and privacy principles of the NORC protocol suite.
+
+---
+### Appendix A: Security & Ordering Enhancements (v1.1 Draft Guidance)
+
+Federation implementations SHOULD prepare for the following forward-compatible features (master spec Sections 6.6–6.21):
+
+1. **Replay & Ordering**: Track per incoming federation link `{origin_server, sequence_number}` sliding window (≥4096) and maintain `prev_message_hash` chain for each conversation. If chain mismatch occurs, mark message for quarantine & request retransmit (future extension) rather than propagating.
+2. **Transcript Binding**: Include ordered ALPN list & capability advertisement in negotiated transcript hash prior to key derivation to detect downgrade attempts.
+3. **Time Sync**: Accept `time_sync` messages from trusted peers; adjust logical offset only—never system clock. Reject messages with timestamp skew >60s unless accompanied by valid hash chain continuity.
+4. **Encrypted File Manifests**: A `file_manifest` payload precedes relay of file chunks; servers treat it as opaque metadata and MUST NOT log plaintext filenames post‑migration.
+5. **Device Revocation Propagation**: Relay `device_revoke` events promptly; cache revocation state with expiry to prevent stale device key usage.
+6. **Hybrid PQ Suites**: If negotiated suite includes PQ component, ensure both classical & PQ public artifacts are present or abort with `ERR_CRYPTO`.
+
+Transition: v1.0 peers ignore unknown message types; federation gateways SHOULD down‑convert (strip sequence/hash fields) only if absolutely required and MUST set `compatibility_mode = true` in logs.

@@ -698,3 +698,20 @@ decode_message(<<1:8, TypeByte:8, MsgIdLen:16, MsgId:MsgIdLen/binary,
 ---
 
 This specification defines the complete NORC-C protocol for client-server communication, optimized for Erlang/OTP implementations while remaining language-agnostic.
+
+---
+### Appendix A: Security Enhancements (v1.1 Draft Forward Compatibility)
+
+The following fields / message types are introduced for forward security & integrity improvements (see master spec Sections 6.6–6.13):
+
+- `sequence_number` (uint64) and `prev_message_hash` (BLAKE3-256) will be added to encrypted message envelopes to enforce ordering and replay protection. Implementations MAY begin tracking these now (tolerating absence) to ease migration.
+- New message types:
+    - `device_revoke` (MSG_DEVICE_REVOKE / 0x05): Announces device key revocation with reason & effective time.
+    - `time_sync` (MSG_TIME_SYNC / 0x33): Signed server time & uncertainty window for skew mitigation.
+    - `file_manifest` (MSG_FILE_MANIFEST / 0x40): Encrypted filename, MIME type, original size, classification, and hash prior to chunk upload (replacing plaintext filename exposure).
+- AEAD AAD MUST (once v1.1 active) include protocol version, message type, sequence number, message ID, length, prev hash, and transcript hash (handshakes) exactly as defined in master spec 6.10.
+- Clients SHOULD start padding ciphertext to power‑of‑two buckets (≤64KB) to reduce size leakage.
+
+Backward Compatibility: These additions are designed under Adjacent‑Major Compatibility (AMC). A v1.0 client MUST ignore unknown message types and absent ordering fields; a v1.1 client MUST accept unsequenced messages from v1.0 peers during transition while logging `compatibility_mode`.
+
+Security Recommendation: Early adopters SHOULD enable optional tracking; reject duplicate `message_id` within a sliding window even before `sequence_number` rollout.

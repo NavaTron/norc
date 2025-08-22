@@ -899,3 +899,17 @@ cache_lookup(Key) ->
 ---
 
 This specification defines the complete NORC-T protocol for trust establishment and management between NORC servers, providing the cryptographic foundation for secure federation while supporting various trust models from basic web-of-trust to government and NATO-level PKI integration.
+
+---
+### Appendix A: Enhanced Trust & Security (v1.1 Draft Forward Compatibility)
+
+The following upcoming enhancements align NORC-T with master specification Sections 6.8–6.21:
+
+1. **Transcript Hashing**: All trust handshake messages (`trust_capabilities`, `trust_request`, `trust_challenge`, `trust_response`, `trust_decision`, `trust_acknowledgment`) will be canonically serialized & hashed into a `transcript_hash` bound into key derivation and signatures to prevent downgrade / message splicing.
+2. **Hybrid PQ Support**: Trust exchanges MAY advertise PQ KEM support (e.g., Kyber768). When selected, certificate attestation includes PQ public key fingerprint; both classical & PQ secrets feed HKDF.
+3. **Revocation Propagation**: `trust_revoke` events SHOULD include optional `prev_revocation_hash` forming a revocation chain enabling detection of suppression. Future Merkle root transparency publication recommended.
+4. **Audit Log Hash Chain**: Trust audit events SHOULD export daily root hash; peers MAY request `audit_root_query` (future message) for transparency validation.
+5. **Time Synchronization Dependency**: Trust validation that includes expiry / freshness criteria MUST reference signed `time_sync` values when available to reduce false negatives due to skew.
+6. **Supply Chain Signals**: `trust_capabilities` MAY include `build_attestation_hash` and `software_sbom_hash` fields; policies can enforce matching against known-good lists.
+
+Backward Compatibility: v1.0 peers ignore new fields. Implementations SHOULD store canonical forms now to simplify later transcript hash integration.
