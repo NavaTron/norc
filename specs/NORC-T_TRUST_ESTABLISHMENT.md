@@ -7,6 +7,45 @@
 
 NORC-T defines the trust establishment and management protocol between NORC servers. It handles the cryptographic handshakes, certificate validation, trust levels, and ongoing trust maintenance required for secure federation.
 
+### 1.1 Quick Glossary
+| Term | Meaning |
+|------|---------|
+| Trust Request | Initial proposal containing desired level & evidence |
+| Challenge | Structured set of verification tasks (DNS, cert, crypto proof) |
+| Trust Decision | Accept / reject / conditional result with permissions |
+| Trust Certificate | Signed artifact codifying granted permissions & expiry |
+| Revocation | Signed notice withdrawing previously granted trust |
+| Renewal | Update to extend or modify existing trust relationship |
+
+### 1.2 End-to-End Trust Flow (Narrative)
+1. Capability advertisement enumerates methods & supported levels.
+2. Requesting server issues `trust_request` referencing evidence & desired level.
+3. Responding server generates `trust_challenge` (domain, certificate, cryptographic proof, organization documents). 
+4. Requester replies with `trust_response` satisfying each challenge element.
+5. Responding server evaluates, computes trust score, issues `trust_decision` and certificate.
+6. Requester acknowledges with `trust_acknowledgment`; mutual trust becomes active.
+7. Continuous monitoring (health & compliance) may trigger renewal or revocation.
+
+### 1.3 Trust Decision Matrix (Example Heuristic)
+| Evidence Attribute | Weight | Criteria | Score Contribution |
+|--------------------|-------:|---------|-------------------|
+| Certificate Chain Validity | 0.30 | Valid + CT + OCSP | 0..30 |
+| Domain Proof Freshness | 0.15 | Within 24h | 0..15 |
+| Organization Verification | 0.20 | Third-party attested | 0..20 |
+| Security Posture (Incidents) | 0.15 | < threshold incidents | 0..15 |
+| Compliance Certifications | 0.10 | FIPS / ISO present | 0..10 |
+| Historical Reliability | 0.10 | Uptime & response metrics | 0..10 |
+> Threshold for `verified` ≥70, `classified` ≥85 (deployment-specific – illustrative only).
+
+### 1.4 Certificate Lifecycle Overview
+| Phase | Action | Key Checks |
+|-------|--------|------------|
+| Issuance | Sign trust certificate | Validity window, signature integrity |
+| Distribution | Provide to peer | Channel security (mTLS) |
+| Active Monitoring | Health, incident, revocation scanning | Expiry proximity, condition deadlines |
+| Renewal | New certificate before `not_after` | Overlap to prevent delivery gaps |
+| Revocation | Broadcast & cache revocation | Immediate route disablement |
+
 **Version Compatibility**: NORC-T follows Adjacent-Major Compatibility (AMC):
 - Version 1.x ↔ 2.x ✅ Compatible
 - Version 1.x ↔ 3.x ❌ Not Compatible  

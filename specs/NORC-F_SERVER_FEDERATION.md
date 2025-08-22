@@ -7,6 +7,33 @@
 
 NORC-F defines the federation protocol between NORC servers, enabling secure message routing, user discovery, and inter-server trust management across organizational boundaries.
 
+### 1.1 Quick Glossary
+| Term | Meaning |
+|------|---------|
+| Federation Link | Persistent mTLS + HTTP/2 channel between two servers |
+| Relay Cache | Structure tracking seen `(origin_server, message_id)` for replay defense |
+| Route Path | Ordered list of servers a federated payload traversed |
+| Hop Count / TTL | Anti-loop / anti-flood counters limiting propagation |
+| Trust Level | NORC-T evaluated assurance tier gating capabilities |
+
+### 1.2 Typical Federation Relay Flow
+1. Establish mTLS connection & ALPN selects highest AMC-compatible version.  
+2. Exchange handshake capabilities + trust status (NORC-T integration).  
+3. For outbound message: group recipients by destination server(s); build `message_relay` with per-device encrypted payloads.  
+4. Update `route_path`, increment `hop_count`, validate TTL.  
+5. Destination validates replay via relay cache + hash chain (future).  
+6. Destination delivers to local user devices; sends `relay_ack` summarizing success/failure.  
+7. Rate limiting & QoS adjust prioritization queues.
+
+### 1.3 Trust Integration Mapping
+| NORC-F Phase | NORC-T Dependency | Purpose |
+|--------------|------------------|---------|
+| Handshake | trust_status / certificates | Verify baseline trust & permissions |
+| Message Relay | trust_level | Enforce max size / classification policy |
+| Presence Federation | permissions list | Filter allowed presence propagation |
+| Archive Sync | trust_certificate.conditions | Check audit / compliance authorization |
+| Revocation Handling | trust_revoke | Immediately disable routes & purge caches |
+
 **Version Compatibility**: NORC-F follows Adjacent-Major Compatibility (AMC):
 - Version 1.x ↔ 2.x ✅ Compatible
 - Version 1.x ↔ 3.x ❌ Not Compatible  

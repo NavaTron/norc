@@ -26,6 +26,30 @@
 
 The NavaTron Open Real-time Communication (NORC) Protocol is a security-first, federated communication protocol designed for real-time messaging, voice, and media transmission. NORC prioritizes end-to-end encryption, metadata minimization, and trusted federation suitable for government, enterprise, and critical communication scenarios.
 
+### 1.0 Glossary (Quick Reference)
+| Term | Meaning |
+|------|---------|
+| AMC | Adjacent-Major Compatibility rule (N ↔ N+1 allowed) |
+| Capability | Feature flag verbally advertised during negotiation (e.g. `voice`) |
+| Conversation | Logical messaging context (1:1, group, channel) |
+| Device | Individual client endpoint with its own key pair |
+| Federation | Server ↔ Server communication layer (NORC-F) |
+| Manifest | Encrypted metadata object describing a file prior to upload |
+| Transcript Hash | BLAKE3 hash over canonical handshake messages used for downgrade resistance |
+| Hash Chain | Sequence linkage using `prev_message_hash` to enforce ordering |
+| Hybrid Suite | Cipher suite combining classical + PQ primitives |
+| Sequence Window | Receiver bitmap used to detect replayed sequence numbers |
+
+### 1.0.1 Why NORC Exists (Problem Statement)
+Existing real‑time protocols either (a) emphasize openness at the cost of strong metadata reduction or (b) emphasize zero‑knowledge but lack robust federation trust governance. NORC explicitly combines: (1) strong cryptography and forward secrecy, (2) explicit trust establishment with revocation and auditability, (3) deterministic version migration (AMC) limiting long‑tail compatibility complexity, (4) optimization for high‑concurrency Erlang/OTP but retaining language neutrality.
+
+### 1.0.2 Reading Order Suggestion
+1. Skim Section 1 (principles & AMC)  
+2. Read your layer of interest (3–5)  
+3. Jump to Security (6) for threat & design rationale  
+4. Consult Implementation (7) + Message Formats (8) for concrete encoding  
+5. Use Test Vectors & Security Model documents for validation.
+
 ### 1.1 Design Principles
 
 - **Security by Design**: End-to-end encryption is mandatory, not optional
@@ -74,6 +98,30 @@ NORC follows **Adjacent-Major Compatibility (AMC)** versioning:
 2. Servers establish trust relationships using NORC-T
 3. Federated communication occurs via NORC-F
 4. All content is end-to-end encrypted between client devices
+
+### 2.2 Field Naming & Conventions
+| Pattern | Meaning | Example |
+|---------|---------|---------|
+| `*_id` | Stable UUID v4 (unless noted) | `message_id` |
+| `*_timestamp` / `timestamp` | Unix epoch seconds (millis/micros when suffixed) | `timestamp` (micros in NORC-C messages) |
+| `*_hash` | BLAKE3-256 unless otherwise stated | `prev_message_hash` |
+| `*_public_key` | Raw 32‑byte public key (Ed25519/X25519) | `ephemeral_public_key` |
+| `classification` | Policy enum defining handling rules | `secret` |
+| `capabilities` | Flat list of atoms (no nested structures) | `[voice, files]` |
+| `expires_at` | Future timestamp hinting rotation/cleanup | session key expiry |
+
+Consistency of naming reduces translation logic between versions and simplifies code generation.
+
+### 2.3 Typical End‑to‑End Scenario (Narrative)
+1. Device registers → obtains server public key & (optionally) device certificate.
+2. User authenticates → session established; version selected via AMC.
+3. Client fetches recipient device keys (key_request / key_response).
+4. Message prepared: content key generated, per‑device wrapping.
+5. AEAD encryption with AAD (sequence & previous hash where available) → send.
+6. Federation forwards (if remote users) validating trust & relay replay cache.
+7. Recipient device unwraps content key → decrypts → verifies hash chain.
+8. Read receipt or ack returns (batched where feasible).
+9. Periodic: session key rotation, device key rotation, time sync, trust revalidation.
 
 ---
 

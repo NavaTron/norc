@@ -7,6 +7,33 @@
 
 NORC-C defines the communication protocol between client devices and NORC servers. It handles device registration, user authentication, real-time messaging, presence, and key management.
 
+### 1.1 Quick Glossary
+| Term | Meaning |
+|------|---------|
+| Session | Authenticated logical connection (WebSocket) after version & auth |
+| Device Registration | One-time association of device key with user account |
+| Content Key | Random per-message (or small burst) symmetric key |
+| Wrapped Key | Content key encrypted per recipient device using ephemeral X25519 |
+| Sequence Number | Monotonic per-session counter for replay/order defense |
+| Prev Message Hash | BLAKE3-256 of prior ciphertext enabling chain integrity |
+
+### 1.2 Recommended Reading Order
+1. Transport & Version Negotiation (Section 2)  
+2. Registration & Authentication (Sections 3–4)  
+3. Messaging & Key Management (Sections 5–6)  
+4. Presence / Conversations / Calls / Files (7–10)  
+5. Error Handling & Implementation Notes (11–12)  
+6. Appendix A for forward security features.
+
+### 1.3 Typical Client Message Send Flow
+1. Ensure session active (else reconnect & negotiate version)  
+2. Fetch / cache recipient device keys (key_request) if stale (>24h or rotated)  
+3. Generate content key; encrypt plaintext; wrap key per device  
+4. Assign `sequence_number` & `prev_message_hash` (if feature negotiated)  
+5. Build AAD & perform AEAD encryption  
+6. Transmit `message_send`; await ack / apply retry policy  
+7. On ack, update delivery metrics & optional UI state.
+
 **Version Compatibility**: NORC-C follows Adjacent-Major Compatibility (AMC):
 - Version 1.x ↔ 2.x ✅ Compatible
 - Version 1.x ↔ 3.x ❌ Not Compatible  

@@ -9,6 +9,37 @@ This guide provides technology-independent implementation guidance for the NORC 
 
 **Version Compatibility**: All NORC implementations MUST follow Adjacent-Major Compatibility (AMC) rules where implementations can interoperate across one major version gap (N ↔ N+1) but not across two major versions (N ↔ N+2).
 
+### 1.1 Design Rationale (Plain Language)
+NORC targets deployments requiring: (a) strong cryptography with minimal operational overhead, (b) predictable upgrade cadence, and (c) explicit, auditable federation trust. AMC limits compatibility surface so engineering teams do not accrue exponential translation code for legacy versions. Erlang/OTP process isolation and supervision align with the protocol’s compartmentalization: each connection/session acts like an actor owning its cryptographic context.
+
+### 1.2 Migration Snapshot
+| Milestone | Action | Notes |
+|----------|--------|-------|
+| v1.0 → v1.1 | Introduce sequencing + hash chain (passive accept then enforce) | Dual-mode to avoid breakage |
+| v1.1 → v2.0 | Enforce transcript binding & highest-suite rule | Fail fast on downgrade |
+| v2.x Hybrid | Add PQ hybrid suite (0101) optional | Performance benchmarking required |
+
+### 1.3 Glossary (Implementation View)
+| Term | Meaning |
+|------|---------|
+| Pipeline Stage | Pure function transforming message context |
+| Connection Worker | Process owning a WebSocket/federation channel |
+| Key Manager | Component abstracting key generation, rotation, revocation |
+| Trust Manager | Evaluates & stores NORC-T relationships |
+| Router | Determines local vs federated delivery path |
+
+### 1.4 Failure Modes & Mitigations
+| Failure | Symptom | Mitigation |
+|---------|---------|------------|
+| Replay Flood | Many duplicate sequence numbers | Sliding window + early drop + rate limit |
+| Downgrade Attempt | Negotiated version below mutual max | Abort handshake; audit event |
+| Key Exhaustion | Session exceeds rotation thresholds | Automatic rotate & rewrap pending messages |
+| Federation Partition | Message backlogs for remote domain | Queue + exponential backoff + alternative route attempt |
+| Trust Revocation | Immediate cut of routes | Purge caches, send user notifications, audit log |
+
+### 1.5 Minimal Viable Implementation (MVI)
+For a prototype: implement AMC negotiation, device registration/auth, message send/ack with per-device wrapping, basic replay window (size 256), and logging without hash chaining. Add advanced security features incrementally.
+
 ## 2. Architecture Recommendations
 
 ### 2.1 Version Management Architecture
