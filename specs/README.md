@@ -136,8 +136,8 @@ To contribute to NORC specifications:
 ## 📧 Contact
 
 - **Project Lead**: [Your Contact Info]
-- **Security Issues**: security@navatron.org (planned)
-- **General Questions**: protocol@navatron.org (planned)
+- **Security Issues**: security@navatron.com (planned)
+- **General Questions**: protocol@navatron.com (planned)
 
 ---
 
