@@ -7,6 +7,13 @@
 
 NORC-T defines the trust establishment and management protocol between NORC servers. It handles the cryptographic handshakes, certificate validation, trust levels, and ongoing trust maintenance required for secure federation.
 
+**Version Compatibility**: NORC-T follows Adjacent-Major Compatibility (AMC):
+- Version 1.x ↔ 2.x ✅ Compatible
+- Version 1.x ↔ 3.x ❌ Not Compatible  
+- Version 2.x ↔ 3.x ✅ Compatible
+
+**Cross-Protocol Compatibility**: NORC-T version must be compatible with both participating servers' NORC-F versions.
+
 ## 2. Trust Models
 
 ### 2.1 Trust Levels
@@ -63,9 +70,11 @@ NORC-T supports hierarchical trust levels with increasing security requirements:
 ### 3.1 Trust Discovery Phase
 
 ```erlang
-%% Trust Capability Advertisement
+%% Trust Capability Advertisement with Version Support
 #{
     type => trust_capabilities,
+    protocol_version => <<"1.0">>,
+    supported_versions => [<<"1.0">>, <<"1.1">>, <<"2.0">>],  % AMC compatible versions
     server_id => <<"alice.example.org">>,
     supported_methods => [direct_exchange, ca_validation, web_of_trust],
     supported_trust_levels => [basic, verified, classified],
@@ -80,7 +89,12 @@ NORC-T supports hierarchical trust levels with increasing security requirements:
         auto_accept_basic => false,
         require_manual_approval => true,
         trust_inheritance => false,  % Don't inherit trust from peers
-        max_trust_age => 31536000    % 1 year in seconds
+        max_trust_age => 31536000,   % 1 year in seconds
+        version_compatibility => #{
+            enforce_amc => true,      % Enforce AMC rules
+            allow_downgrade => false, % Don't allow version downgrade
+            require_latest_minor => false % Don't require latest minor version
+        }
     }
 }
 ```

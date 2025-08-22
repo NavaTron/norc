@@ -7,9 +7,36 @@
 
 This guide provides technology-independent implementation guidance for the NORC protocol suite, with specific optimizations for Erlang/OTP systems. The protocols are designed to work efficiently across different programming languages and platforms while leveraging Erlang's strengths in concurrent, fault-tolerant systems.
 
+**Version Compatibility**: All NORC implementations MUST follow Adjacent-Major Compatibility (AMC) rules where implementations can interoperate across one major version gap (N ↔ N+1) but not across two major versions (N ↔ N+2).
+
 ## 2. Architecture Recommendations
 
-### 2.1 Layered Architecture
+### 2.1 Version Management Architecture
+
+Every NORC implementation MUST include a version management layer:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                Application Layer                    │
+├─────────────────────────────────────────────────────┤
+│              Version Management Layer               │
+│  • AMC Compatibility Checking                      │
+│  • Feature Detection & Negotiation                 │
+│  • Message Translation Between Versions            │
+├─────────────────────────────────────────────────────┤
+│  NORC-C    │    NORC-F     │     NORC-T           │
+│ (Client)   │ (Federation)  │    (Trust)           │
+├─────────────────────────────────────────────────────┤
+│              Protocol Common Layer                  │
+├─────────────────────────────────────────────────────┤
+│               Cryptography Layer                    │
+├─────────────────────────────────────────────────────┤
+│                Transport Layer                      │
+│          (WebSocket/TLS, HTTP/2/mTLS)              │
+└─────────────────────────────────────────────────────┘
+```
+
+### 2.2 Layered Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐

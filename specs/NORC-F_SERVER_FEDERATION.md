@@ -7,6 +7,11 @@
 
 NORC-F defines the federation protocol between NORC servers, enabling secure message routing, user discovery, and inter-server trust management across organizational boundaries.
 
+**Version Compatibility**: NORC-F follows Adjacent-Major Compatibility (AMC):
+- Version 1.x ↔ 2.x ✅ Compatible
+- Version 1.x ↔ 3.x ❌ Not Compatible  
+- Version 2.x ↔ 3.x ✅ Compatible
+
 ## 2. Transport Layer
 
 ### 2.1 Connection Requirements
@@ -16,6 +21,47 @@ NORC-F defines the federation protocol between NORC servers, enabling secure mes
 - **Certificate Requirements**: Valid X.509 certificates for server identity
 - **Connection Pooling**: Persistent connections with multiplexing
 - **Compression**: HPACK header compression, optional gzip for large payloads
+- **Version Negotiation**: Mandatory using ALPN extension
+
+#### 2.1.1 Federation Version Negotiation
+
+Federation connections use ALPN (Application-Layer Protocol Negotiation) for version selection:
+
+```erlang
+%% TLS ALPN negotiation with version support
+ALPN_PROTOCOLS = [
+    "norc-f/2.0",    % Preferred version
+    "norc-f/1.2",    % Fallback compatible versions
+    "norc-f/1.1",
+    "norc-f/1.0"
+].
+
+%% Post-connection handshake message
+#{
+    type => federation_handshake,
+    requesting_server => <<"alice.example.org">>,
+    target_server => <<"bob.example.org">>,
+    protocol_version => <<"2.0">>,
+    supported_versions => [<<"1.0">>, <<"1.1">>, <<"1.2">>, <<"2.0">>],
+    capabilities => [federation, voice_relay, file_storage],
+    compatibility_requirements => #{
+        min_trust_level => basic,
+        required_features => [message_relay],
+        optional_features => [voice_relay, presence_federation]
+    }
+}
+
+%% Handshake response with version confirmation
+#{
+    type => federation_handshake_response,
+    responding_server => <<"bob.example.org">>,
+    accepted_version => <<"2.0">>,
+    compatibility_mode => false,     % true if AMC fallback active
+    shared_capabilities => [federation, message_relay, presence_federation],
+    version_warnings => [],          % Warnings if compatibility mode
+    connection_id => <<"conn-uuid">>
+}
+```
 
 ### 2.2 Server Identity
 

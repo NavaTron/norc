@@ -35,7 +35,19 @@ The NavaTron Open Real-time Communication (NORC) Protocol is a security-first, f
 - **Forward Secrecy**: Session keys are ephemeral and regularly rotated
 - **Compliance Ready**: Built-in support for classification levels and audit trails
 
-### 1.2 Protocol Layers
+### 1.2 Version Compatibility
+
+NORC follows **Adjacent-Major Compatibility (AMC)** versioning:
+
+- **Rule**: Implementations may interoperate across one major version gap (N ↔ N+1)
+- **Examples**:
+  - Version 1.x ↔ 2.x ✅ **Compatible**
+  - Version 1.x ↔ 3.x ❌ **Not Compatible**
+  - Version 2.x ↔ 3.x ✅ **Compatible**
+- **Rationale**: Provides migration path while preventing complexity of supporting too many legacy versions
+- **Implementation**: Servers MUST negotiate the highest mutually supported version within AMC constraints
+
+### 1.3 Protocol Layers
 
 - **NORC-C**: Client ↔ Server communication
 - **NORC-F**: Server ↔ Server federation
@@ -71,9 +83,31 @@ The NavaTron Open Real-time Communication (NORC) Protocol is a security-first, f
 
 NORC-C operates over WebSocket connections with TLS 1.3 mandatory. The WebSocket subprotocol identifier is `norc-c-v1`.
 
+#### 3.1.1 Version Negotiation
+
+Clients and servers MUST implement version negotiation following AMC rules:
+
+```erlang
+%% Connection handshake with version negotiation
+#{
+    type => connection_request,
+    client_versions => [<<"1.0">>, <<"1.1">>, <<"2.0">>], % Supported versions
+    preferred_version => <<"2.0">>,                        % Client preference
+    capabilities => [messaging, voice, video, files]
+}
+
+%% Server response with negotiated version
+#{
+    type => connection_accepted,
+    negotiated_version => <<"2.0">>,                       % Highest mutual version
+    server_capabilities => [federation, voice, video, files, e2ee],
+    compatibility_mode => false                            % true if using AMC fallback
+}
+```
+
 **Connection URI Format:**
 ```
-wss://server.domain.tld:port/norc-c
+wss://server.domain.tld:port/norc-c?version=2.0
 ```
 
 ### 3.2 Authentication and Registration
@@ -197,6 +231,37 @@ For forward secrecy, NORC uses X25519 key exchange for ephemeral session keys:
 ### 4.1 Transport Layer
 
 NORC-F uses mutual TLS (mTLS) over TCP with HTTP/2 framing for efficiency. Default port is 8843.
+
+#### 4.1.1 Version Negotiation for Federation
+
+Federation connections MUST negotiate compatible versions using AMC:
+
+```erlang
+%% Federation handshake with version compatibility check
+#{
+    type => federation_hello,
+    server_id => <<"alice.example.org">>,
+    protocol_versions => #{
+        norc_f => [<<"1.0">>, <<"1.2">>, <<"2.0">>],      % NORC-F versions
+        norc_t => [<<"1.0">>, <<"1.1">>]                  % NORC-T versions
+    },
+    capabilities => [federation, voice_relay, file_storage]
+}
+
+%% Response with negotiated versions
+#{
+    type => federation_hello_response,
+    server_id => <<"bob.example.org">>,
+    negotiated_versions => #{
+        norc_f => <<"2.0">>,
+        norc_t => <<"1.1">>
+    },
+    compatibility_warnings => [
+        <<"NORC-F 2.0 -> 1.0 compatibility mode active">>,
+        <<"Some advanced features may be unavailable">>
+    ]
+}
+```
 
 ### 4.2 Server Identity
 
@@ -414,7 +479,75 @@ Servers MUST enforce appropriate handling based on classification.
 
 ## 7. Implementation Guidelines
 
-### 7.1 Erlang/OTP Optimizations
+### 7.1 Adjacent-Major Compatibility Implementation
+
+#### 7.1.1 Version Negotiation Algorithm
+
+```erlang
+%% Version compatibility checking
+-spec is_compatible(Version1 :: binary(), Version2 :: binary()) -> boolean().
+is_compatible(V1, V2) ->
+    {Major1, Minor1} = parse_version(V1),
+    {Major2, Minor2} = parse_version(V2),
+    
+    %% AMC Rule: Adjacent major versions are compatible
+    abs(Major1 - Major2) =< 1.
+
+%% Find highest compatible version
+negotiate_version(ClientVersions, ServerVersions) ->
+    Compatible = [V || V1 <- ClientVersions, 
+                      V2 <- ServerVersions, 
+                      is_compatible(V1, V2), V <- [V1, V2]],
+    case Compatible of
+        [] -> {error, no_compatible_version};
+        Versions -> 
+            Highest = lists:max(Versions),
+            {ok, Highest}
+    end.
+
+%% Version parsing helper
+parse_version(<<"v", Rest/binary>>) -> parse_version(Rest);
+parse_version(VersionBin) ->
+    [MajorBin, MinorBin | _] = binary:split(VersionBin, <<".">>, [global]),
+    {binary_to_integer(MajorBin), binary_to_integer(MinorBin)}.
+```
+
+#### 7.1.2 Compatibility Mode Handling
+
+When operating across major version boundaries, implementations MUST:
+
+1. **Feature Detection**: Query available capabilities after version negotiation
+2. **Graceful Degradation**: Disable features not supported by both versions
+3. **Compatibility Warnings**: Log when operating in compatibility mode
+4. **Message Translation**: Transform messages between version formats when needed
+
+```erlang
+%% Compatibility mode message handling
+handle_message_with_compatibility(Message, NegotiatedVersion, LocalVersion) ->
+    case {major_version(NegotiatedVersion), major_version(LocalVersion)} of
+        {Same, Same} -> 
+            %% Same major version - no translation needed
+            handle_message_native(Message);
+        {Remote, Local} when abs(Remote - Local) =:= 1 ->
+            %% Adjacent major versions - apply compatibility translation
+            TranslatedMessage = translate_message(Message, NegotiatedVersion, LocalVersion),
+            handle_message_native(TranslatedMessage);
+        _ ->
+            %% Should never happen if negotiation worked correctly
+            {error, incompatible_versions}
+    end.
+```
+
+#### 7.1.3 Migration Strategy
+
+Organizations upgrading NORC implementations should follow this pattern:
+
+1. **Phase 1**: Deploy new version alongside old version
+2. **Phase 2**: Gradually migrate clients/servers using AMC compatibility
+3. **Phase 3**: Once all systems are on version N+1, optionally upgrade to N+2
+4. **Phase 4**: Deprecate version N support after full migration
+
+### 7.2 Erlang/OTP Optimizations
 
 The protocol is designed to leverage Erlang/OTP strengths:
 
@@ -505,28 +638,43 @@ For easier debugging and non-Erlang implementations, NORC also supports JSON ove
 ### 8.3 Message Type Registry
 
 ```erlang
-%% NORC-C Message Types
--define(MSG_DEVICE_REGISTER,    16#01).
--define(MSG_AUTH_REQUEST,       16#02).
--define(MSG_AUTH_RESPONSE,      16#03).
--define(MSG_MESSAGE_SEND,       16#10).
--define(MSG_MESSAGE_ACK,        16#11).
--define(MSG_PRESENCE_UPDATE,    16#20).
--define(MSG_KEY_REQUEST,        16#30).
--define(MSG_KEY_RESPONSE,       16#31).
--define(MSG_SESSION_KEY_EXCHANGE, 16#32).
+%% NORC-C Message Types (Version-aware)
+-define(MSG_CONNECTION_REQUEST,     16#00).  % Version negotiation
+-define(MSG_CONNECTION_ACCEPTED,    16#01).  % Version confirmation
+-define(MSG_DEVICE_REGISTER,        16#02).  % Renamed from 16#01
+-define(MSG_AUTH_REQUEST,           16#03).  % Renamed from 16#02
+-define(MSG_AUTH_RESPONSE,          16#04).  % Renamed from 16#03
+-define(MSG_MESSAGE_SEND,           16#10).
+-define(MSG_MESSAGE_ACK,            16#11).
+-define(MSG_PRESENCE_UPDATE,        16#20).
+-define(MSG_KEY_REQUEST,            16#30).
+-define(MSG_KEY_RESPONSE,           16#31).
+-define(MSG_SESSION_KEY_EXCHANGE,   16#32).
 
-%% NORC-F Message Types  
--define(MSG_MESSAGE_RELAY,      16#80).
--define(MSG_DELIVERY_ACK,       16#81).
--define(MSG_SERVER_DISCOVERY,   16#90).
--define(MSG_SERVER_INFO,        16#91).
+%% NORC-F Message Types (Version-aware)
+-define(MSG_FEDERATION_HELLO,       16#70).  % New: Version negotiation
+-define(MSG_FEDERATION_HELLO_RESP,  16#71).  % New: Version response
+-define(MSG_MESSAGE_RELAY,          16#80).
+-define(MSG_DELIVERY_ACK,           16#81).
+-define(MSG_SERVER_DISCOVERY,       16#90).
+-define(MSG_SERVER_INFO,            16#91).
 
-%% NORC-T Message Types
--define(MSG_TRUST_REQUEST,      16#A0).
--define(MSG_TRUST_CHALLENGE,    16#A1).
--define(MSG_TRUST_RESPONSE,     16#A2).
--define(MSG_TRUST_REVOKE,       16#A3).
+%% NORC-T Message Types (Version-aware)
+-define(MSG_TRUST_CAPABILITY,       16#9F).  % New: Version capabilities
+-define(MSG_TRUST_REQUEST,          16#A0).
+-define(MSG_TRUST_CHALLENGE,        16#A1).
+-define(MSG_TRUST_RESPONSE,         16#A2).
+-define(MSG_TRUST_REVOKE,           16#A3).
+
+%% Version Compatibility Matrix
+-define(VERSION_COMPATIBILITY, #{
+    <<"1.0">> => [<<"1.0">>, <<"1.1">>, <<"1.2">>, <<"2.0">>],  % AMC: can talk to 2.x
+    <<"1.1">> => [<<"1.0">>, <<"1.1">>, <<"1.2">>, <<"2.0">>],
+    <<"1.2">> => [<<"1.0">>, <<"1.1">>, <<"1.2">>, <<"2.0">>],
+    <<"2.0">> => [<<"1.0">>, <<"1.1">>, <<"1.2">>, <<"2.0">>, <<"2.1">>, <<"3.0">>], % AMC: 1.x and 3.x
+    <<"2.1">> => [<<"1.0">>, <<"1.1">>, <<"1.2">>, <<"2.0">>, <<"2.1">>, <<"3.0">>],
+    <<"3.0">> => [<<"2.0">>, <<"2.1">>, <<"3.0">>, <<"3.1">>, <<"4.0">>]  % AMC: 2.x and 4.x
+}).
 ```
 
 ---

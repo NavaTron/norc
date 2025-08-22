@@ -7,14 +7,54 @@
 
 NORC-C defines the communication protocol between client devices and NORC servers. It handles device registration, user authentication, real-time messaging, presence, and key management.
 
+**Version Compatibility**: NORC-C follows Adjacent-Major Compatibility (AMC):
+- Version 1.x ↔ 2.x ✅ Compatible
+- Version 1.x ↔ 3.x ❌ Not Compatible  
+- Version 2.x ↔ 3.x ✅ Compatible
+
 ## 2. Transport and Connection
 
 ### 2.1 WebSocket Connection
 
 - **Protocol**: WebSocket over TLS 1.3 (WSS)
-- **Subprotocol**: `norc-c-v1` (binary) or `norc-c-json-v1` (JSON)
-- **URI Format**: `wss://server.domain.tld[:port]/norc-c`
+- **Subprotocol**: `norc-c-v{major}.{minor}` (e.g., `norc-c-v1.0`, `norc-c-v2.0`)
+- **URI Format**: `wss://server.domain.tld[:port]/norc-c?version={version}`
 - **Default Port**: 443 (HTTPS) or 8843 (dedicated)
+- **Version Negotiation**: Required for all connections
+
+#### 2.1.1 Version Negotiation Process
+
+```erlang
+%% Step 1: Client connection request with supported versions
+GET /norc-c HTTP/1.1
+Host: server.example.org
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Protocol: norc-c-v1.0, norc-c-v1.1, norc-c-v2.0
+Sec-WebSocket-Extensions: permessage-deflate
+NORC-Client-Versions: 1.0,1.1,2.0
+NORC-Preferred-Version: 2.0
+
+%% Step 2: Server response with negotiated version
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+Sec-WebSocket-Protocol: norc-c-v2.0
+NORC-Negotiated-Version: 2.0
+NORC-Compatibility-Mode: false
+
+%% Step 3: First WebSocket message confirms version
+#{
+    type => version_confirmation,
+    negotiated_version => <<"2.0">>,
+    server_capabilities => [messaging, voice, video, e2ee, federation],
+    client_must_support => [messaging, e2ee],
+    compatibility_features => [],  % Empty if same major version
+    session_id => <<"session-uuid">>
+}
+```
 
 ### 2.2 Connection Lifecycle
 
