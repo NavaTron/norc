@@ -14,10 +14,10 @@ NORC is a secure real-time communication protocol built for organizations that n
 
 **Key Innovation**: NORC uses "graduated trust levels" instead of the traditional all-or-nothing approach to federation. You can communicate securely with:
 
-• **Basic partners** (standard business relationships)  
-• **Verified partners** (higher assurance requirements)  
-• **Classified partners** (government/defense contractors)  
-• **NATO-level partners** (international security cooperation)
+* **Basic partners** (standard business relationships)  
+* **Verified partners** (higher assurance requirements)  
+* **Classified partners** (government/defense contractors)  
+* **NATO-level partners** (international security cooperation)
 
 Each level has different security requirements and capabilities, giving you granular control over who you trust and how much.
 
@@ -28,10 +28,10 @@ Each level has different security requirements and capabilities, giving you gran
 │   NORC-T        │  │   NORC-F        │  │   NORC-C        │
 │ Trust Management│◄─┤ Federation Layer│◄─┤ Client-Server   │
 │                 │  │                 │  │                 │
-│ • Trust levels  │  │ • Message relay │  │ • Device auth   │
-│ • Verification  │  │ • Trust enforce │  │ • E2E messaging │
-│ • Revocation    │  │ • Load balance  │  │ • File transfer │
-│ • Audit trails  │  │ • Performance   │  │ • Presence      │
+│ * Trust levels  │  │ * Message relay │  │ * Device auth   │
+│ * Verification  │  │ * Trust enforce │  │ * E2E messaging │
+│ * Revocation    │  │ * Load balance  │  │ * File transfer │
+│ * Audit trails  │  │ * Performance   │  │ * Presence      │
 └─────────────────┘  └─────────────────┘  └─────────────────┘
 ```
 
@@ -73,24 +73,24 @@ NORC is designed for organizations that can't compromise on security:
 
 ### Defense and Government
 
-• Multi-national cooperation (NATO, Five Eyes, allied defense contractors)
-• Classified information sharing with cryptographic audit trails  
-• Supply chain coordination across security-cleared vendors
-• Diplomatic communications requiring both security and deniability
+* Multi-national cooperation (NATO, Five Eyes, allied defense contractors)
+* Classified information sharing with cryptographic audit trails  
+* Supply chain coordination across security-cleared vendors
+* Diplomatic communications requiring both security and deniability
 
 ### Enterprise and Critical Infrastructure
 
-• Financial institutions sharing threat intelligence
-• Healthcare systems collaborating on patient care across organizations
-• Energy companies coordinating grid operations and incident response
-• Technology companies with sensitive IP and customer data
+* Financial institutions sharing threat intelligence
+* Healthcare systems collaborating on patient care across organizations
+* Energy companies coordinating grid operations and incident response
+* Technology companies with sensitive IP and customer data
 
 ### Why Not Just Use Signal or Teams?
 
-• **Signal**: Perfect for individuals and small teams, but doesn't scale to multi-organization collaboration
-• **Microsoft Teams**: Great for business, but no on-premises installation—you need to trust Microsoft
-• **Slack/Discord**: Designed for convenience, not security
-• **Matrix**: Federation-capable but security is optional and implementation is complex
+* **Signal**: Perfect for individuals and small teams, but doesn't scale to multi-organization collaboration
+* **Microsoft Teams**: Great for business, but no on-premises installation—you need to trust Microsoft
+* **Slack/Discord**: Designed for convenience, not security
+* **Matrix**: Federation-capable but security is optional and implementation is complex
 
 ---
 
@@ -99,40 +99,40 @@ NORC is designed for organizations that can't compromise on security:
 ### 1. The Federation Security Problem
 
 **Traditional Approach**: "Trust everyone or trust no one"
-• Matrix: Anyone can join, security is optional
-• Signal: Only works within one organization
+* Matrix: Anyone can join, security is optional
+* Signal: Only works within one organization
 
 **NORC's Approach**: "Trust selectively with cryptographic verification"
-• Organizations explicitly negotiate trust relationships
-• Each level has different security requirements
-• Trust can be instantly revoked with cryptographic proof
-• All decisions are recorded in tamper-evident audit logs
+* Organizations explicitly negotiate trust relationships
+* Each level has different security requirements
+* Trust can be instantly revoked with cryptographic proof
+* All decisions are recorded in tamper-evident audit logs
 
 ### 2. The Complexity Time Bomb  
 
 **The Problem**: Every protocol eventually becomes unmaintainable
-• TLS supports ancient SSL versions vulnerable to attacks
-• Email protocols carry 40+ years of legacy extensions
-• Matrix rooms can have incompatible encryption settings
+* TLS supports ancient SSL versions vulnerable to attacks
+* Email protocols carry 40+ years of legacy extensions
+* Matrix rooms can have incompatible encryption settings
 
 **NORC's Solution**: Adjacent-Major Compatibility (AMC)
-• Only support 2 versions at once (current + next OR current + previous)
-• Forces regular upgrades but prevents breaking changes
-• Predictable migration timelines for IT departments
-• Bounded testing and security analysis requirements
+* Only support 2 versions at once (current + next OR current + previous)
+* Forces regular upgrades but prevents breaking changes
+* Predictable migration timelines for IT departments
+* Bounded testing and security analysis requirements
 
 ### 3. The Quantum Computing Threat
 
 **The Reality**: Quantum computers that can break current encryption are coming
-• Could happen in 10-30 years (experts disagree on timeline)
-• "Harvest now, decrypt later" attacks are happening TODAY
-• Most organizations have no quantum-resistant strategy
+* Could happen in 10-30 years (experts disagree on timeline)
+* "Harvest now, decrypt later" attacks are happening TODAY
+* Most organizations have no quantum-resistant strategy
 
 **NORC's Approach**: Hybrid cryptography from day one
-• Combines classical encryption (secure today) with post-quantum (secure tomorrow)
-• If either approach is broken, your data stays protected
-• Gradual transition as quantum threats become real
-• No painful migration when quantum computers arrive
+* Combines classical encryption (secure today) with post-quantum (secure tomorrow)
+* If either approach is broken, your data stays protected
+* Gradual transition as quantum threats become real
+* No painful migration when quantum computers arrive
 
 ---
 
@@ -142,27 +142,27 @@ NORC is designed for organizations that can't compromise on security:
 
 **Device-Level Security**: Every device has its own encryption keys
 
-• Lost phone? Only that device is compromised
-• Employee leaves? Revoke only their devices
-• Granular access control based on device trust
+* Lost phone? Only that device is compromised
+* Employee leaves? Revoke only their devices
+* Granular access control based on device trust
 
 **Metadata Protection**: Servers can't see what you're sharing
 
-• File names, sizes, and types are encrypted
-• Message timing is randomized to prevent analysis
-• Only encrypted blobs flow between organizations
+* File names, sizes, and types are encrypted
+* Message timing is randomized to prevent analysis
+* Only encrypted blobs flow between organizations
 
 **Forward Secrecy**: Past messages stay secure even if keys are stolen
 
-• Each conversation uses ephemeral keys
-• Keys are automatically deleted after use
-• Compromise of today's keys doesn't affect yesterday's messages
+* Each conversation uses ephemeral keys
+* Keys are automatically deleted after use
+* Compromise of today's keys doesn't affect yesterday's messages
 
 **Audit Everything**: Perfect for compliance and investigation
 
-• Every trust decision is cryptographically recorded
-• Message routing is logged without revealing content
-• Tamper-evident audit trails for regulatory compliance
+* Every trust decision is cryptographically recorded
+* Message routing is logged without revealing content
+* Tamper-evident audit trails for regulatory compliance
 
 ### Cryptography Stack
 
@@ -183,28 +183,28 @@ NORC uses modern, battle-tested cryptographic primitives:
 
 **Signal Protocol**: Brilliant cryptography, wrong architecture
 
-• Built for consumer messaging apps
-• Centralized design doesn't support federation
-• No enterprise governance features
+* Built for consumer messaging apps
+* Centralized design doesn't support federation
+* No enterprise governance features
 
 **Matrix Protocol**: Right idea, execution problems
 
-• Security is optional (most deployments are insecure)
-• Complexity grows without bound (operational nightmare)
-• Federation is trust-everyone-or-no-one
+* Security is optional (most deployments are insecure)
+* Complexity grows without bound (operational nightmare)
+* Federation is trust-everyone-or-no-one
 
 **TLS + Application Layer**: The current enterprise approach
 
-• Every app rolls its own security (inconsistent, usually wrong)
-• No standardized federation between different systems
-• Compliance features bolted on as afterthoughts
+* Every app rolls its own security (inconsistent, usually wrong)
+* No standardized federation between different systems
+* Compliance features bolted on as afterthoughts
 
 **NORC's Advantage**: Purpose-built for organizational security needs
 
-• Federation designed into the protocol from day one
-• Security is mandatory, not optional
-• Governance and compliance features are built-in, not add-ons
-• Predictable complexity through version management
+* Federation designed into the protocol from day one
+* Security is mandatory, not optional
+* Governance and compliance features are built-in, not add-ons
+* Predictable complexity through version management
 
 ---
 
@@ -255,15 +255,15 @@ NORC is currently in active development with implementations in Erlang/OTP (refe
 
 ### For Security Researchers
 
-• Formal verification of security properties using tools like Tamarin/ProVerif
-• Performance optimization and cryptographic analysis
-• Integration with post-quantum cryptography research
+* Formal verification of security properties using tools like Tamarin/ProVerif
+* Performance optimization and cryptographic analysis
+* Integration with post-quantum cryptography research
 
 ### For Organizations
 
-• Evaluate NORC for future secure collaboration requirements
-• Participate in early adopter programs and testing
-• Contribute to compliance and governance requirements
+* Evaluate NORC for future secure collaboration requirements
+* Participate in early adopter programs and testing
+* Contribute to compliance and governance requirements
 
 ### Development Roadmap
 
@@ -292,10 +292,10 @@ The future of organizational communication will be determined by the protocols w
 **License**: Apache 2.0 – Enterprise-friendly, patent-protected, commercially permissive
 
 **Community**:
-• [Protocol Discussions](../../discussions) - Design and implementation questions
-• [Security Issues](mailto:security@navatron.com) - Private security disclosure
-• [Blog & Updates](https://clemens.ms/norc/) - Latest developments and insights
-• [Contact](mailto:norc@navatron.com) - Partnership and early access programs
+* [Protocol Discussions](../../discussions) - Design and implementation questions
+* [Security Issues](mailto:security@navatron.com) - Private security disclosure
+* [Blog & Updates](https://clemens.ms/norc/) - Latest developments and insights
+* [Contact](mailto:norc@navatron.com) - Partnership and early access programs
 
 ---
 
