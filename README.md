@@ -1,4 +1,4 @@
-# NORC: Why Organizations Need a New Approach to Secure Communication
+# NORC: Why Organizations Need a New Approach to Secure Real-time Communication
 
 **The first protocol that doesn't make you choose between security and collaboration**
 
@@ -10,7 +10,7 @@ Current solutions force you to choose between security and collaboration. **NORC
 
 ## What is NORC?
 
-NORC is a secure communication protocol built for organizations that need both ironclad security and practical federation. Think of it as the next evolution beyond Signal (secure but centralized) and Matrix (federated but complex)—combining the best of both worlds while preparing for the post-quantum future.
+NORC is a secure real-time communication protocol built for organizations that need both ironclad security and practical federation. Think of it as the next evolution beyond Signal (secure but centralized) and Matrix (federated but complex)—combining the best of both worlds while preparing for the post-quantum future.
 
 **Key Innovation**: NORC uses "graduated trust levels" instead of the traditional all-or-nothing approach to federation. You can communicate securely with:
 
@@ -269,9 +269,9 @@ NORC is currently in active development with implementations in Erlang/OTP (refe
 
 | Version | Focus | Timeline |
 |---------|-------|----------|
-| v1.1 | Core protocol stabilization, formal security proofs | Q4 2025 |
-| v2.0 | Performance optimizations, expanded trust levels | Q2 2026 |
-| v3.0 | Group messaging, advanced media support | Q4 2026 |
+| v1.0 | Core protocol stabilization, formal security proofs | Q4 2025 |
+| v1.1 | Performance optimizations, expanded trust levels | Q2 2026 |
+| v1.2 | Group messaging, advanced media support | Q4 2026 |
 
 ---
 
