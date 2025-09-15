@@ -287,6 +287,54 @@ The future of organizational communication will be determined by the protocols w
 
 ---
 
+## Minimal Rust Demo (Device Registration Prototype)
+
+This repository includes a very small Rust showcase of the first NORC-C step: device registration. It is intentionally minimal (no TLS, auth handshake, or crypto session establishment yet) and is meant as a starting point for future incremental implementation of the full spec.
+
+Implemented subset vs spec:
+* Section 3.2.1 Device Registration (simplified JSON form)
+* In-memory device store keyed by `device_id` (UUID v4)
+* Ed25519 public key validation (hex input, length + curve check)
+* Idempotent behavior: second registration of same `device_id` returns `already_registered`
+
+Not yet implemented (future work): version negotiation, authentication challenge, session key establishment, message send, federation, trust, replay protection, audit chaining.
+
+### Run the demo
+
+```bash
+cargo run -p server   # Terminal 1
+cargo run -p client   # Terminal 2 (registers a random device)
+```
+
+Set a custom server URL:
+```bash
+NORC_SERVER=http://127.0.0.1:8080 cargo run -p client
+```
+
+Example response (pretty printed):
+```json
+{
+	"status": "registered",
+	"device": {
+		"device_id": "c2c7b2d6-7e9a-4b84-8b19-2b0b6c0c1234",
+		"public_key": "ab4f...",
+		"device_info": {"name": "Dev-c2c7b2d6", "type": "desktop", "capabilities": ["messaging"]},
+		"first_registered_timestamp": 1726400000
+	}
+}
+```
+
+Restarting the client quickly will create a new random device (new keypair + UUID). To test idempotency, modify the client to reuse a fixed UUID/public key pair.
+
+Roadmap steps for the Rust implementation:
+1. Add version negotiation & capability advertisement
+2. Add authenticated handshake (transcript hash + signatures) per Section 3
+3. Implement ephemeral session key derivation & AEAD framing
+4. Add message_send with per-device key wrapping
+5. Introduce basic federation scaffolding (NORC-F) & trust (NORC-T)
+
+---
+
 ## License & Community
 
 **License**: Apache 2.0 – Enterprise-friendly, patent-protected, commercially permissive
