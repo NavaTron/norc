@@ -31,6 +31,10 @@ static FED_PEERS: Lazy<Vec<String>> = Lazy::new(|| {
         .unwrap_or_else(|| Vec::new())
 });
 
+// Persistent federation peer connections (peer_addr -> tx)
+type PeerTx = tokio::sync::mpsc::UnboundedSender<NorcMessage>;
+static PEER_SENDERS: Lazy<Mutex<HashMap<String, PeerTx>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
 // Global in-memory store (bear minimal; in production use persistent storage)
 static DEVICE_STORE: Lazy<Mutex<HashMap<Uuid, RegisteredDevice>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 // Active websocket sessions for broadcast (device_id -> session)
@@ -124,10 +128,15 @@ async fn main() -> anyhow::Result<()> {
         .route("/register", post(register_device));
     let app = app.route("/ws", axum::routing::get(ws_handler));
 
-    let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+    let bind_str = std::env::var("NORC_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
+    let addr: SocketAddr = bind_str.parse().expect("Invalid NORC_BIND address");
     init_tracing();
     info!(%addr, "NORC server listening");
     let listener = TcpListener::bind(addr).await?;
+    // Spawn persistent peer connection tasks
+    for peer in FED_PEERS.iter() {
+        spawn_peer_task(peer.clone());
+    }
     serve(listener, app.into_make_service()).await?;
     Ok(())
 }
@@ -300,10 +309,9 @@ fn broadcast_plain(plaintext: &str, from: Uuid) {
     // Forward to federation peers (ciphertexts per local recipient differ; choose first as canonical or re-encrypt?)
     // For stub simplicity: re-encrypt once under a temporary keyless assumption: pick first ciphertext if present
     if let Some((_tx,_orig_json)) = to_send.first() {
-        // Parse the first NorcMessage::ChatCiphertext JSON so we can wrap
         if let Ok(parsed) = serde_json::from_str::<NorcMessage>(&to_send[0].1) {
             if let NorcMessage::ChatCiphertext { sender, nonce, ciphertext_b64 } = parsed {
-                forward_to_peers(sender, nonce, &ciphertext_b64, 0);
+                enqueue_federation(sender, nonce, &ciphertext_b64, 0);
             }
         }
     }
@@ -323,29 +331,53 @@ fn broadcast_federated_cipher(origin: &Uuid, nonce: u64, ciphertext_b64: &str, h
         }
     }
     for (tx, json) in to_send { let _ = tx.send(Message::Text(json)); }
-    if !FED_PEERS.is_empty() {
-        // Continue forwarding if hops still acceptable
-        if hops <= 4 { forward_to_peers(*origin, nonce, ciphertext_b64, hops); }
+    if !FED_PEERS.is_empty() && hops <= 4 { enqueue_federation(*origin, nonce, ciphertext_b64, hops); }
+}
+
+fn enqueue_federation(origin: Uuid, nonce: u64, ciphertext_b64: &str, hops: u8) {
+    let msg = NorcMessage::FederationForward { origin, nonce, ciphertext_b64: ciphertext_b64.to_string(), hops };
+    let peers = PEER_SENDERS.lock().unwrap();
+    for (addr, tx) in peers.iter() {
+        if tx.send(msg.clone()).is_err() {
+            warn!(peer=%addr, "Failed to enqueue federation message (channel closed)");
+        }
     }
 }
 
-fn forward_to_peers(origin: Uuid, nonce: u64, ciphertext_b64: &str, hops: u8) {
-    if FED_PEERS.is_empty() { return; }
-    let msg = NorcMessage::FederationForward { origin, nonce, ciphertext_b64: ciphertext_b64.to_string(), hops };
-    let json = match serde_json::to_string(&msg) { Ok(j)=>j, Err(_)=>return };
-    for peer in FED_PEERS.iter() {
-        let peer = peer.clone();
-        let json_clone = json.clone();
-        tokio::spawn(async move {
-            let url = format!("ws://{peer}/ws");
+fn spawn_peer_task(peer_addr: String) {
+    // Create channel and register
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<NorcMessage>();
+    PEER_SENDERS.lock().unwrap().insert(peer_addr.clone(), tx);
+    tokio::spawn(async move {
+        let mut backoff_ms: u64 = 500;
+        loop {
+            let url = format!("ws://{}/ws", peer_addr);
             match connect_async(&url).await {
                 Ok((mut stream, _resp)) => {
-                    if let Err(e) = stream.send(tungstenite::Message::Text(json_clone)).await { warn!(%peer, error=%e.to_string(), "Failed sending federated frame"); }
+                    info!(peer=%peer_addr, "Federation peer connected");
+                    backoff_ms = 500; // reset
+                    while let Some(msg) = rx.recv().await {
+                        match serde_json::to_string(&msg) {
+                            Ok(json) => {
+                                if let Err(e) = stream.send(tungstenite::Message::Text(json)).await {
+                                    warn!(peer=%peer_addr, error=%e.to_string(), "Federation send error; reconnecting");
+                                    break;
+                                }
+                            }
+                            Err(e) => warn!(peer=%peer_addr, error=%e.to_string(), "Serialize federation frame failed"),
+                        }
+                    }
+                    info!(peer=%peer_addr, "Federation peer disconnected");
                 }
-                Err(e) => warn!(%peer, error=%e.to_string(), "Federation connection failed"),
+                Err(e) => {
+                    warn!(peer=%peer_addr, error=%e.to_string(), backoff_ms, "Federation connect failed");
+                }
             }
-        });
-    }
+            // Reconnect path
+            tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+            backoff_ms = (backoff_ms * 2).min(8000);
+        }
+    });
 }
 
 // Removed local canonicalization helpers (in norc_core now)
