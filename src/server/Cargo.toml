@@ -6,7 +6,7 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NavaTron NORC Server - Terminal chat server"
+description = "NavaTron NORC Server"
 keywords = ["server", "chat", "federation"]
 categories = ["command-line-utilities"]
 
@@ -16,11 +16,11 @@ path = "main.rs"
 
 [dependencies]
 # Internal crates
-navatron-protocol = { path = "../../crates/protocol" }
-navatron-transport = { path = "../../crates/transport" }
-navatron-server-core = { path = "../../crates/server-core" }
-navatron-tui = { path = "../../crates/tui" }
-navatron-cli = { path = "../../crates/cli" }
+navatron-protocol = { path = "../crates/protocol" }
+navatron-transport = { path = "../crates/transport" }
+navatron-server-core = { path = "../crates/server-core" }
+navatron-tui = { path = "../crates/tui" }
+navatron-cli = { path = "../crates/cli" }
 
 # Async runtime
 tokio = { workspace = true }

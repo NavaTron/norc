@@ -7,9 +7,8 @@ members = [
     "src/crates/server-core",
     "src/crates/tui",
     "src/crates/cli",
-    "src/bin/client",
-    "src/bin/server",
-    "tests/integration",
+    "src/client",
+    "src/server"
 ]
 
 [workspace.package]
@@ -20,8 +19,8 @@ edition = "2024"
 rust-version = "1.89.0"
 repository = "https://github.com/navatron/norc"
 homepage = "https://navatron.com"
-description = "NavaTron Open Real-time Communication Protocol - Production-ready terminal chat system"
-keywords = ["chat", "protocol", "encryption", "federation", "terminal"]
+description = "NavaTron Open Real-time Communication Protocol"
+keywords = ["chat", "protocol", "encryption", "federation"]
 categories = ["network-programming", "cryptography", "command-line-utilities"]
 
 [workspace.dependencies]

@@ -1,3 +1,2 @@
 *.lock
 /target
-/validation_test/target
