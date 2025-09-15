@@ -13,7 +13,7 @@ use ed25519_dalek::VerifyingKey;
 use rand::rngs::OsRng;
 use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
 use std::convert::TryInto;
-use norc_core::{ClientHello, ServerHello, SUPPORTED_VERSIONS, negotiate_version, compute_transcript_hash, derive_master_secret, DeviceRegisterRequest, RegisterResponse, RegisteredDevice, derive_session_keys, aead_encrypt, AeadDirection};
+use norc_core::{ClientHello, ServerHello, SUPPORTED_VERSIONS, negotiate_version, compute_transcript_hash, derive_master_secret, DeviceRegisterRequest, RegisterResponse, RegisteredDevice, derive_session_keys, aead_encrypt, aead_decrypt, AeadDirection, SessionKeys, NorcMessage, next_nonce};
 use futures_util::{StreamExt, SinkExt};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 
@@ -23,17 +23,18 @@ static SERVER_CAPABILITIES: &[&str] = &["messaging", "registration"]; // minimal
 
 // Global in-memory store (bear minimal; in production use persistent storage)
 static DEVICE_STORE: Lazy<Mutex<HashMap<Uuid, RegisteredDevice>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-// Active websocket sessions for broadcast (device_id -> sender channel)
+// Active websocket sessions for broadcast (device_id -> session)
 type Tx = tokio::sync::mpsc::UnboundedSender<Message>;
-static SESSIONS: Lazy<Mutex<HashMap<Uuid, Tx>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ChatCiphertext {
-    r#type: String, // "chat_ciphertext"
-    sender: Uuid,
-    nonce: u64,
-    ciphertext_b64: String,
+#[derive(Clone)]
+struct Session {
+    tx: Tx,
+    session_keys: SessionKeys,
+    s2c_nonce: u64,
+    c2s_nonce: u64,
 }
+static SESSIONS: Lazy<Mutex<HashMap<Uuid, Session>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+// ChatCiphertext now represented by NorcMessage::ChatCiphertext in core
 
 // (Removed local duplicate protocol structs; using norc_core types)
 
@@ -216,41 +217,36 @@ async fn handle_ws(mut socket: WebSocket) {
                 // Store session for broadcast if registered
                 if let RegisterResponse::Registered { device } | RegisterResponse::AlreadyRegistered { device } = resp {
                     device_id_opt = Some(device.device_id);
-                    SESSIONS.lock().unwrap().insert(device.device_id, tx.clone());
+                    let session = Session { tx: tx.clone(), session_keys: session_keys.clone(), s2c_nonce: 0, c2s_nonce: 0 };
+                    SESSIONS.lock().unwrap().insert(device.device_id, session);
                 }
             }
         }
     }
 
-    // If registered, begin chat loop
+    // If registered, begin chat loop (encrypted inbound/outbound)
     if let Some(dev_id) = device_id_opt {
-        let mut c2s_nonce: u64 = 0;
-        let mut s2c_nonce: u64 = 0; // server side tracks broadcast nonce per connection (placeholder, not persisted)
         while let Some(msg_res) = ws_receiver.next().await {
             let Ok(msg) = msg_res else { break };
             match msg {
                 Message::Text(txt) => {
-                    // Expect JSON with either chat_plain or chat_ciphertext (future). For MVP accept plaintext.
-                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&txt) {
-                        if val.get("type").and_then(|t| t.as_str()) == Some("chat_plain") {
-                            if let Some(ptext) = val.get("body").and_then(|b| b.as_str()) {
-                                c2s_nonce = c2s_nonce.wrapping_add(1);
-                                // Encrypt for broadcast using server_to_client_key direction
-                                let ciphertext = aead_encrypt(
-                                    AeadDirection::ServerToClient,
-                                    &session_keys,
-                                    s2c_nonce,
-                                    ptext.as_bytes(),
-                                    b"chat"
-                                ).unwrap_or_default();
-                                s2c_nonce = s2c_nonce.wrapping_add(1);
-                                let msg = ChatCiphertext {
-                                    r#type: "chat_ciphertext".into(),
-                                    sender: dev_id,
-                                    nonce: s2c_nonce - 1,
-                                    ciphertext_b64: b64.encode(ciphertext),
-                                };
-                                broadcast_chat(msg, dev_id);
+                    if let Ok(msg_enum) = serde_json::from_str::<NorcMessage>(&txt) {
+                        match msg_enum {
+                            NorcMessage::ChatCiphertext { sender: _, nonce, ciphertext_b64 } => {
+                                let mut sessions = SESSIONS.lock().unwrap();
+                                if let Some(session) = sessions.get_mut(&dev_id) {
+                                    if let Ok(ct) = b64.decode(ciphertext_b64.as_bytes()) {
+                                        if let Ok(plain) = aead_decrypt(AeadDirection::ClientToServer, &session.session_keys, nonce, &ct, b"chat") {
+                                            if let Ok(plain_str) = String::from_utf8(plain) {
+                                                broadcast_plain(&plain_str, dev_id);
+                                            }
+                                        }
+                                    }
+                                    let _ = next_nonce(&mut session.c2s_nonce); // increment with safeguard
+                                }
+                            }
+                            NorcMessage::ChatPlain { body } => {
+                                broadcast_plain(&body, dev_id);
                             }
                         }
                     }
@@ -263,13 +259,21 @@ async fn handle_ws(mut socket: WebSocket) {
         SESSIONS.lock().unwrap().remove(&dev_id);
     }
 }
-
-fn broadcast_chat(msg: ChatCiphertext, from: Uuid) {
-    let json = serde_json::to_string(&msg).unwrap();
-    let sessions = SESSIONS.lock().unwrap();
-    for (dev, tx) in sessions.iter() {
-        if *dev != from { let _ = tx.send(Message::Text(json.clone())); }
+fn broadcast_plain(plaintext: &str, from: Uuid) {
+    let mut to_send: Vec<(Tx, String)> = Vec::new();
+    {
+        let mut sessions = SESSIONS.lock().unwrap();
+        for (dev, session) in sessions.iter_mut() {
+            if *dev == from { continue; }
+            let nonce = session.s2c_nonce;
+            if let Ok(ct) = aead_encrypt(AeadDirection::ServerToClient, &session.session_keys, nonce, plaintext.as_bytes(), b"chat") {
+                session.s2c_nonce = session.s2c_nonce.wrapping_add(1);
+                let chat_msg = NorcMessage::ChatCiphertext { sender: from, nonce, ciphertext_b64: b64.encode(ct) };
+                to_send.push((session.tx.clone(), serde_json::to_string(&chat_msg).unwrap()));
+            }
+        }
     }
+    for (tx, json) in to_send { let _ = tx.send(Message::Text(json)); }
 }
 
 // Removed local canonicalization helpers (in norc_core now)

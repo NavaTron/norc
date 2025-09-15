@@ -168,3 +168,25 @@ pub fn aead_decrypt(direction: AeadDirection, keys: &SessionKeys, nonce_u64: u64
     cipher.decrypt(GenericArray::from_slice(&nonce), Payload { msg: ciphertext, aad })
         .map_err(|_| ProtocolError::Crypto)
 }
+
+// -------- Message Framing (Early Draft) --------
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum NorcMessage {
+    #[serde(rename = "chat_ciphertext")]
+    ChatCiphertext { sender: uuid::Uuid, nonce: u64, ciphertext_b64: String },
+    #[serde(rename = "chat_plain")]
+    ChatPlain { body: String },
+}
+
+pub const MAX_CHAT_NONCE: u64 = u64::MAX - 1; // Reserve last value for rollover guard
+
+#[derive(Debug, Error)]
+#[error("nonce exhausted")]
+pub struct NonceExhausted;
+
+pub fn next_nonce(current: &mut u64) -> Result<u64, NonceExhausted> {
+    if *current >= MAX_CHAT_NONCE { return Err(NonceExhausted); }
+    let n = *current; *current = current.wrapping_add(1); Ok(n)
+}
