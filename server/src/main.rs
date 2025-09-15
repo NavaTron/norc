@@ -13,7 +13,7 @@ use ed25519_dalek::VerifyingKey;
 use rand::rngs::OsRng;
 use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
 use std::convert::TryInto;
-use norc_core::{ClientHello, ServerHello, SUPPORTED_VERSIONS, negotiate_version, compute_transcript_hash, derive_master_secret, DeviceRegisterRequest, RegisterResponse, RegisteredDevice};
+use norc_core::{ClientHello, ServerHello, SUPPORTED_VERSIONS, negotiate_version, compute_transcript_hash, derive_master_secret, DeviceRegisterRequest, RegisterResponse, RegisteredDevice, derive_session_keys};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 
 // Supported protocol versions (ordered descending preference)
@@ -146,7 +146,12 @@ async fn handle_ws(mut socket: WebSocket) {
     let th_b64 = b64.encode(th_bytes);
 
     // Derive master secret (HKDF-SHA256 for demo; spec uses HKDF with domain label + BLAKE3 by default; this is placeholder)
-    let _ms = derive_master_secret(&client_hello.nonce, shared.as_bytes());
+    let ms = derive_master_secret(&client_hello.nonce, shared.as_bytes());
+    let session_keys = derive_session_keys(&ms, &th_bytes);
+    println!("Derived session keys c2s={} s2c={}",
+        hex::encode(&session_keys.client_to_server_key[..8]),
+        hex::encode(&session_keys.server_to_client_key[..8])
+    );
 
     let server_hello = ServerHello {
         r#type: "server_hello".into(),

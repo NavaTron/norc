@@ -16,3 +16,4 @@ ed25519-dalek = "2"
 rand = "0.8"
 uuid = { version = "1", features = ["v4", "serde", "fast-rng"] }
 thiserror = "1"
+chacha20poly1305 = { version = "0.10", features = ["std"] }

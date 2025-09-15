@@ -7,7 +7,7 @@ use tokio_tungstenite::connect_async;
 use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
 use futures_util::{SinkExt, StreamExt};
 use std::convert::TryInto;
-use norc_core::{ClientHello as CoreClientHello, derive_master_secret};
+use norc_core::{ClientHello as CoreClientHello, derive_master_secret, derive_session_keys};
 
 // Structures for WS registration round-trip
 #[derive(Debug, serde::Serialize)]
@@ -154,7 +154,19 @@ async fn main() -> anyhow::Result<()> {
     let server_pub = X25519PublicKey::from(server_pub_arr);
     let shared = client_secret.diffie_hellman(&server_pub);
     let ms = derive_master_secret(&b64.encode(client_nonce), shared.as_bytes());
-    println!("Master secret (hex, truncated): {}...", hex::encode(&ms[..16]));
+    let th_bytes = b64.decode(sh.transcript_hash.as_bytes()).unwrap_or_default();
+    if th_bytes.len() == 32 {
+        let mut th_arr = [0u8;32]; th_arr.copy_from_slice(&th_bytes);
+        let session_keys = derive_session_keys(&ms, &th_arr);
+        println!(
+            "Master secret (hex,16)={} c2s_key={} s2c_key={}",
+            hex::encode(&ms[..16]),
+            hex::encode(&session_keys.client_to_server_key[..8]),
+            hex::encode(&session_keys.server_to_client_key[..8])
+        );
+    } else {
+        println!("Master secret (hex,16)={} (no session keys - bad transcript hash length)", hex::encode(&ms[..16]));
+    }
 
     // Perform device registration over WS
     let signing_key = SigningKey::generate(&mut OsRng);

@@ -6,6 +6,8 @@ use hkdf::Hkdf;
 use sha2::Sha256; // placeholder until HKDF-BLAKE3 decided
 use uuid::Uuid;
 use thiserror::Error;
+use chacha20poly1305::{ChaCha20Poly1305, Key, KeyInit, aead::{Aead, Payload}};
+use chacha20poly1305::aead::generic_array::GenericArray;
 
 // Supported versions (could later be built dynamically)
 pub const SUPPORTED_VERSIONS: &[&str] = &["1.1", "1.0"];
@@ -128,4 +130,41 @@ pub fn derive_master_secret(client_nonce_b64: &str, shared: &[u8]) -> [u8;32] {
     let mut ms = [0u8;32];
     let _ = hk.expand(b"norc:ms:v1", &mut ms); // ignore error for now
     ms
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionKeys {
+    pub client_to_server_key: [u8;32],
+    pub server_to_client_key: [u8;32],
+}
+
+pub fn derive_session_keys(master_secret: &[u8;32], transcript_hash: &[u8;32]) -> SessionKeys {
+    // Use transcript hash as salt for directional key derivation (placeholder)
+    let hk = Hkdf::<Sha256>::new(Some(transcript_hash), master_secret);
+    let mut c2s = [0u8;32];
+    let mut s2c = [0u8;32];
+    let _ = hk.expand(b"norc:traffic:c2s:v1", &mut c2s);
+    let _ = hk.expand(b"norc:traffic:s2c:v1", &mut s2c);
+    SessionKeys { client_to_server_key: c2s, server_to_client_key: s2c }
+}
+
+#[derive(Debug)]
+pub enum AeadDirection { ClientToServer, ServerToClient }
+
+pub fn aead_encrypt(direction: AeadDirection, keys: &SessionKeys, nonce_u64: u64, plaintext: &[u8], aad: &[u8]) -> Result<Vec<u8>, ProtocolError> {
+    let key_bytes = match direction { AeadDirection::ClientToServer => &keys.client_to_server_key, AeadDirection::ServerToClient => &keys.server_to_client_key };
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(key_bytes));
+    let mut nonce = [0u8;12];
+    nonce[4..].copy_from_slice(&nonce_u64.to_be_bytes());
+    cipher.encrypt(GenericArray::from_slice(&nonce), Payload { msg: plaintext, aad })
+        .map_err(|_| ProtocolError::Crypto)
+}
+
+pub fn aead_decrypt(direction: AeadDirection, keys: &SessionKeys, nonce_u64: u64, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, ProtocolError> {
+    let key_bytes = match direction { AeadDirection::ClientToServer => &keys.client_to_server_key, AeadDirection::ServerToClient => &keys.server_to_client_key };
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(key_bytes));
+    let mut nonce = [0u8;12];
+    nonce[4..].copy_from_slice(&nonce_u64.to_be_bytes());
+    cipher.decrypt(GenericArray::from_slice(&nonce), Payload { msg: ciphertext, aad })
+        .map_err(|_| ProtocolError::Crypto)
 }
