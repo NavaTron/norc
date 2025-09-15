@@ -1,0 +1,52 @@
+[package]
+name = "navatron-protocol"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "NavaTron NORC Protocol implementation - message types, codecs, and versioning"
+keywords = ["norc", "protocol", "messaging", "encryption"]
+categories = ["network-programming", "encoding"]
+
+[dependencies]
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+bincode = { workspace = true }
+base64 = { workspace = true }
+serde_with = "3.0"
+
+# Cryptography  
+blake3 = { workspace = true }
+hkdf = { workspace = true }
+chacha20poly1305 = { workspace = true }
+ed25519-dalek = { workspace = true }
+x25519-dalek = { workspace = true }
+curve25519-dalek = "4.0"
+rand_core = { workspace = true }
+zeroize = { workspace = true }
+sha2 = "0.10"
+
+# Error handling
+thiserror = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# Async
+tokio = { workspace = true, features = ["macros", "time"] }
+tokio-util = { workspace = true, features = ["codec"] }
+bytes = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tokio-test = "0.4"
+rand = { workspace = true }
+
+[features]
+default = []
+# Enable post-quantum hybrid cryptography
+pq-hybrid = []

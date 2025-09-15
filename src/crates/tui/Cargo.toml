@@ -1,0 +1,27 @@
+[package]
+name = "navatron-tui"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "NavaTron NORC TUI components - Terminal user interface"
+keywords = ["tui", "terminal", "ui"]
+categories = ["command-line-interface"]
+
+[dependencies]
+# Terminal UI
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+tui-textarea = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Time handling
+chrono = { workspace = true }
+
+[features]
+default = []
