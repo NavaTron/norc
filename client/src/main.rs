@@ -10,8 +10,22 @@ use std::convert::TryInto;
 use norc_core::{ClientHello as CoreClientHello, derive_master_secret, derive_session_keys, aead_encrypt, aead_decrypt, AeadDirection, NorcMessage, next_nonce};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use std::io::{self, Write};
+use tracing::{info, debug, warn};
 use tokio::sync::mpsc;
 use tokio::task;
+fn init_tracing() {
+    static START: std::sync::Once = std::sync::Once::new();
+    START.call_once(|| {
+        use tracing_subscriber::EnvFilter;
+        let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "info,client=debug".to_string());
+        tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::new(filter))
+            .with_target(false)
+            .with_level(true)
+            .compact()
+            .init();
+    });
+}
 
 // Structures for WS registration round-trip
 #[derive(Debug, serde::Serialize)]
@@ -62,22 +76,9 @@ struct WsDeviceInfoOpt {
 fn log_server_device(d: &WsServerDevice) {
     if let Some(info) = &d.device_info {
         let caps = info.capabilities.as_ref().map(|v| v.join(",")).unwrap_or_else(|| "-".into());
-        println!(
-            "Server reports device: id={} pubkey={}.. first_registered_ts={} name={:?} type={:?} caps={}",
-            d.device_id,
-            &d.public_key[..std::cmp::min(16, d.public_key.len())],
-            d.first_registered_timestamp,
-            info.name,
-            info.r#type,
-            caps
-        );
+        info!(device_id=%d.device_id, first_registered_ts=d.first_registered_timestamp, name=?info.name, dtype=?info.r#type, caps=%caps, "Server device record");
     } else {
-        println!(
-            "Server reports device: id={} pubkey={}.. first_registered_ts={} (no device_info)",
-            d.device_id,
-            &d.public_key[..std::cmp::min(16, d.public_key.len())],
-            d.first_registered_timestamp
-        );
+        info!(device_id=%d.device_id, first_registered_ts=d.first_registered_timestamp, "Server device record (no info)");
     }
 }
 
@@ -88,7 +89,8 @@ async fn main() -> anyhow::Result<()> {
     let server_host = std::env::var("NORC_SERVER").unwrap_or_else(|_| "127.0.0.1:8080".into());
     // Derive ws URL (no TLS for demo)
     let ws_url = format!("ws://{}/ws", server_host);
-    println!("Connecting WebSocket {ws_url} ...");
+    init_tracing();
+    info!(%ws_url, "Connecting WebSocket");
     let (mut ws_stream, _resp) = connect_async(&ws_url).await?;
 
     // Ephemeral X25519
@@ -117,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
     };
-    println!("Raw ServerHello: {server_text}");
+    debug!(raw=%server_text, "Received ServerHello");
     #[derive(Deserialize)]
     struct ServerHelloResp {
         r#type: String,
@@ -139,22 +141,12 @@ async fn main() -> anyhow::Result<()> {
         .copied()
         .filter(|c| sh.server_capabilities.iter().any(|sc| sc == c))
         .collect();
-    println!(
-        "Negotiated version: {} (compat_mode={}) server_caps={:?} client_caps={:?} shared_caps={:?} nonce_len={} transcript_hash_len={} type={}",
-        sh.negotiated_version,
-        sh.compatibility_mode,
-        sh.server_capabilities,
-        capabilities,
-        intersection,
-        nonce_bytes.len(),
-        transcript_ok,
-        sh.r#type
-    );
+    info!(version=%sh.negotiated_version, compat=sh.compatibility_mode, server_caps=?sh.server_capabilities, shared_caps=?intersection, nonce_len=nonce_bytes.len(), th_len=transcript_ok, "Negotiated");
 
     // Derive shared secret + master secret (placeholder HKDF-SHA256 label)
     let server_pub_raw = b64.decode(sh.ephemeral_pub.as_bytes())?;
-    if server_pub_raw.len() != 32 { println!("Bad server ephemeral length"); return Ok(()); }
-    let server_pub_arr: [u8;32] = match server_pub_raw.try_into() { Ok(a) => a, Err(_) => { println!("Ephemeral conversion failed"); return Ok(()); } };
+    if server_pub_raw.len() != 32 { warn!("Bad server ephemeral length"); return Ok(()); }
+    let server_pub_arr: [u8;32] = match server_pub_raw.try_into() { Ok(a) => a, Err(_) => { warn!("Ephemeral conversion failed"); return Ok(()); } };
     let server_pub = X25519PublicKey::from(server_pub_arr);
     let shared = client_secret.diffie_hellman(&server_pub);
     let ms = derive_master_secret(&b64.encode(client_nonce), shared.as_bytes());
@@ -162,14 +154,9 @@ async fn main() -> anyhow::Result<()> {
     if th_bytes.len() == 32 {
         let mut th_arr = [0u8;32]; th_arr.copy_from_slice(&th_bytes);
         let session_keys = derive_session_keys(&ms, &th_arr);
-        println!(
-            "Master secret (hex,16)={} c2s_key={} s2c_key={}",
-            hex::encode(&ms[..16]),
-            hex::encode(&session_keys.client_to_server_key[..8]),
-            hex::encode(&session_keys.server_to_client_key[..8])
-        );
+        debug!(ms16=%hex::encode(&ms[..16]), c2s=%hex::encode(&session_keys.client_to_server_key[..8]), s2c=%hex::encode(&session_keys.server_to_client_key[..8]), "Derived session keys");
     } else {
-        println!("Master secret (hex,16)={} (no session keys - bad transcript hash length)", hex::encode(&ms[..16]));
+        warn!(ms16=%hex::encode(&ms[..16]), "Bad transcript hash length");
     }
 
     // Perform device registration over WS
@@ -188,7 +175,7 @@ async fn main() -> anyhow::Result<()> {
         },
     };
     let reg_json = serde_json::to_string(&reg)?;
-    println!("Sending device_register over WS (device_id={device_id})");
+    info!(%device_id, "Sending device_register");
     ws_stream.send(tokio_tungstenite::tungstenite::protocol::Message::Text(reg_json)).await?;
 
     if let Some(Ok(Message::Text(reg_resp_txt))) = ws_stream.next().await {
@@ -196,21 +183,21 @@ async fn main() -> anyhow::Result<()> {
             Ok(resp) => {
                 match resp.inner {
                     WsRegisterInner::Registered { device } | WsRegisterInner::AlreadyRegistered { device } => {
-                        println!("Register response status consumed (type={})", resp.r#type);
+                        info!(r#type=%resp.r#type, "Register response consumed");
                         log_server_device(&device);
                         // After registration, derive session keys again for use in loop
                     }
                     WsRegisterInner::InvalidKey { message } => {
-                        println!("Registration failed (type={}) message={}", resp.r#type, message);
+                        warn!(r#type=%resp.r#type, %message, "Registration failed");
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Failed to parse WS register response: {e}\nRaw: {reg_resp_txt}");
+                warn!(error=%e.to_string(), raw=%reg_resp_txt, "Failed to parse WS register response");
             }
         }
     } else {
-        println!("No WS register response received");
+        warn!("No WS register response received");
     }
 
     // Interactive encrypted chat loop with duplex split
@@ -235,13 +222,13 @@ async fn main() -> anyhow::Result<()> {
                     if let Ok(NorcMessage::ChatCiphertext { sender, nonce, ciphertext_b64 }) = serde_json::from_str::<NorcMessage>(&txt) {
                         if let Ok(ct) = b64.decode(ciphertext_b64.as_bytes()) {
                             if let Ok(plain) = aead_decrypt(AeadDirection::ServerToClient, &reader_keys, nonce, &ct, b"chat") {
-                                if let Ok(s) = String::from_utf8(plain) { println!("\n[from {}] {}", &sender.to_string()[..8], s); print!(" > "); let _=io::stdout().flush(); }
+                                if let Ok(s) = String::from_utf8(plain) { debug!(from=%sender, nonce, len=s.len(), "Received chat"); println!("\n[from {}] {}", &sender.to_string()[..8], s); print!(" > "); let _=io::stdout().flush(); }
                             }
                         }
                     }
                 }
             });
-            println!("Enter messages (Ctrl+C to quit):");
+            info!("Enter messages (Ctrl+C to quit)");
             let mut c2s_nonce: u64 = 0;
             loop {
                 print!(" > "); let _=io::stdout().flush();
@@ -249,7 +236,7 @@ async fn main() -> anyhow::Result<()> {
                 if io::stdin().read_line(&mut line).is_err() { break; }
                 let line = line.trim();
                 if line.is_empty() { continue; }
-                let nonce_val = match next_nonce(&mut c2s_nonce) { Ok(n)=>n, Err(_)=>{ println!("Nonce exhausted; closing."); break; } };
+                let nonce_val = match next_nonce(&mut c2s_nonce) { Ok(n)=>n, Err(_)=>{ warn!("Nonce exhausted; closing"); break; } };
                 let ct = aead_encrypt(AeadDirection::ClientToServer, &session_keys, nonce_val, line.as_bytes(), b"chat").unwrap_or_default();
                 let frame = NorcMessage::ChatCiphertext { sender: Uuid::nil(), nonce: nonce_val, ciphertext_b64: b64.encode(ct) };
                 tx.send(frame).ok();

@@ -14,6 +14,7 @@ use rand::rngs::OsRng;
 use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
 use std::convert::TryInto;
 use norc_core::{ClientHello, ServerHello, SUPPORTED_VERSIONS, negotiate_version, compute_transcript_hash, derive_master_secret, DeviceRegisterRequest, RegisterResponse, RegisteredDevice, derive_session_keys, aead_encrypt, aead_decrypt, AeadDirection, SessionKeys, NorcMessage, next_nonce};
+use tracing::{info, debug};
 use futures_util::{StreamExt, SinkExt};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 
@@ -115,7 +116,8 @@ async fn main() -> anyhow::Result<()> {
     let app = app.route("/ws", axum::routing::get(ws_handler));
 
     let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-    println!("NORC minimal registration server listening on {addr}");
+    init_tracing();
+    info!(%addr, "NORC server listening");
     let listener = TcpListener::bind(addr).await?;
     serve(listener, app.into_make_service()).await?;
     Ok(())
@@ -128,6 +130,7 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse { ws.on_upgrade(h
 async fn handle_ws(mut socket: WebSocket) {
     // Expect first message ClientHello JSON text
     let Some(Ok(Message::Text(txt))) = socket.recv().await else { return; };
+    debug!(len = txt.len(), "Received initial frame");
     let parsed: Result<ClientHello, _> = serde_json::from_str(&txt);
     let client_hello = match parsed { Ok(c) => c, Err(_) => { let _ = socket.send(Message::Close(None)).await; return; } };
     if client_hello.r#type != "client_hello" { let _ = socket.send(Message::Close(None)).await; return; }
@@ -161,10 +164,7 @@ async fn handle_ws(mut socket: WebSocket) {
     // Derive master secret (HKDF-SHA256 for demo; spec uses HKDF with domain label + BLAKE3 by default; this is placeholder)
     let ms = derive_master_secret(&client_hello.nonce, shared.as_bytes());
     let session_keys = derive_session_keys(&ms, &th_bytes);
-    println!("Derived session keys c2s={} s2c={}",
-        hex::encode(&session_keys.client_to_server_key[..8]),
-        hex::encode(&session_keys.server_to_client_key[..8])
-    );
+    info!(c2s = %hex::encode(&session_keys.client_to_server_key[..8]), s2c = %hex::encode(&session_keys.server_to_client_key[..8]), "Derived session keys");
 
     let server_hello = ServerHello {
         r#type: "server_hello".into(),
@@ -219,6 +219,7 @@ async fn handle_ws(mut socket: WebSocket) {
                     device_id_opt = Some(device.device_id);
                     let session = Session { tx: tx.clone(), session_keys: session_keys.clone(), s2c_nonce: 0, c2s_nonce: 0 };
                     SESSIONS.lock().unwrap().insert(device.device_id, session);
+                    info!(device_id = %device.device_id, "Device registered");
                 }
             }
         }
@@ -238,6 +239,7 @@ async fn handle_ws(mut socket: WebSocket) {
                                     if let Ok(ct) = b64.decode(ciphertext_b64.as_bytes()) {
                                         if let Ok(plain) = aead_decrypt(AeadDirection::ClientToServer, &session.session_keys, nonce, &ct, b"chat") {
                                             if let Ok(plain_str) = String::from_utf8(plain) {
+                                                debug!(from = %dev_id, nonce, len = plain_str.len(), "Inbound chat decrypted");
                                                 broadcast_plain(&plain_str, dev_id);
                                             }
                                         }
@@ -246,6 +248,7 @@ async fn handle_ws(mut socket: WebSocket) {
                                 }
                             }
                             NorcMessage::ChatPlain { body } => {
+                                debug!(from = %dev_id, len = body.len(), "Inbound plaintext chat");
                                 broadcast_plain(&body, dev_id);
                             }
                         }
@@ -257,6 +260,7 @@ async fn handle_ws(mut socket: WebSocket) {
         }
         // Remove session on exit
         SESSIONS.lock().unwrap().remove(&dev_id);
+        info!(device_id = %dev_id, "Session closed");
     }
 }
 fn broadcast_plain(plaintext: &str, from: Uuid) {
@@ -273,8 +277,23 @@ fn broadcast_plain(plaintext: &str, from: Uuid) {
             }
         }
     }
-    for (tx, json) in to_send { let _ = tx.send(Message::Text(json)); }
+    for (tx, json) in to_send.iter() { let _ = tx.send(Message::Text(json.clone())); }
+    if !to_send.is_empty() { debug!(recipients = to_send.len(), from = %from, len = plaintext.len(), "Broadcasted chat"); }
 }
 
 // Removed local canonicalization helpers (in norc_core now)
+
+fn init_tracing() {
+    static START: std::sync::Once = std::sync::Once::new();
+    START.call_once(|| {
+        use tracing_subscriber::EnvFilter;
+        let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "info,server=debug".to_string());
+        tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::new(filter))
+            .with_target(false)
+            .with_level(true)
+            .compact()
+            .init();
+    });
+}
 

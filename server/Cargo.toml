@@ -23,3 +23,5 @@ base64 = "0.22"
 hkdf = "0.12"
 sha2 = "0.10"
 futures-util = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

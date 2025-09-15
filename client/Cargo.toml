@@ -21,3 +21,5 @@ base64 = "0.22"
 hkdf = "0.12"
 sha2 = "0.10"
 norc_core = { path = "../norc_core" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
