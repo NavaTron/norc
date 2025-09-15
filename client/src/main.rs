@@ -1,4 +1,3 @@
-#![allow(dead_code)] // Temporary: suppress unused field warnings for serde structs during early prototype
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize};
@@ -56,6 +55,28 @@ struct WsDeviceInfoOpt {
     capabilities: Option<Vec<String>>,
 }
 
+fn log_server_device(d: &WsServerDevice) {
+    if let Some(info) = &d.device_info {
+        let caps = info.capabilities.as_ref().map(|v| v.join(",")).unwrap_or_else(|| "-".into());
+        println!(
+            "Server reports device: id={} pubkey={}.. first_registered_ts={} name={:?} type={:?} caps={}",
+            d.device_id,
+            &d.public_key[..std::cmp::min(16, d.public_key.len())],
+            d.first_registered_timestamp,
+            info.name,
+            info.r#type,
+            caps
+        );
+    } else {
+        println!(
+            "Server reports device: id={} pubkey={}.. first_registered_ts={} (no device_info)",
+            d.device_id,
+            &d.public_key[..std::cmp::min(16, d.public_key.len())],
+            d.first_registered_timestamp
+        );
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let client_versions = vec!["1.1", "1.0"]; // descending preference
@@ -92,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
     };
-    println!("ServerHello: {server_text}");
+    println!("Raw ServerHello: {server_text}");
     #[derive(Deserialize)]
     struct ServerHelloResp {
         r#type: String,
@@ -106,7 +127,25 @@ async fn main() -> anyhow::Result<()> {
     let sh: ServerHelloResp = serde_json::from_str(&server_text)?;
     // Compute transcript hash locally to verify match
     // Accept server transcript hash (client-side recompute can be added later)
-    println!("Negotiated version: {} (compat_mode={})", sh.negotiated_version, sh.compatibility_mode);
+    // Use previously unused fields from ServerHello for logging & validation
+    let nonce_bytes = match b64.decode(sh.nonce.as_bytes()) { Ok(b) => b, Err(_) => Vec::new() };
+    let transcript_ok = sh.transcript_hash.len();
+    let intersection: Vec<&str> = capabilities
+        .iter()
+        .copied()
+        .filter(|c| sh.server_capabilities.iter().any(|sc| sc == c))
+        .collect();
+    println!(
+        "Negotiated version: {} (compat_mode={}) server_caps={:?} client_caps={:?} shared_caps={:?} nonce_len={} transcript_hash_len={} type={}",
+        sh.negotiated_version,
+        sh.compatibility_mode,
+        sh.server_capabilities,
+        capabilities,
+        intersection,
+        nonce_bytes.len(),
+        transcript_ok,
+        sh.r#type
+    );
 
     // Derive shared secret + master secret (placeholder HKDF-SHA256 label)
     let server_pub_raw = b64.decode(sh.ephemeral_pub.as_bytes())?;
@@ -139,7 +178,15 @@ async fn main() -> anyhow::Result<()> {
     if let Some(Ok(tokio_tungstenite::tungstenite::protocol::Message::Text(reg_resp_txt))) = ws_stream.next().await {
         match serde_json::from_str::<WsRegisterResponse>(&reg_resp_txt) {
             Ok(resp) => {
-                println!("Register response: {:#?}", resp.inner);
+                match resp.inner {
+                    WsRegisterInner::Registered { device } | WsRegisterInner::AlreadyRegistered { device } => {
+                        println!("Register response status consumed (type={})", resp.r#type);
+                        log_server_device(&device);
+                    }
+                    WsRegisterInner::InvalidKey { message } => {
+                        println!("Registration failed (type={}) message={}", resp.r#type, message);
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("Failed to parse WS register response: {e}\nRaw: {reg_resp_txt}");
