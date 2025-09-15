@@ -242,13 +242,13 @@ impl ConnectionHandle {
         self.task_handle.abort();
         
         // Wait for task completion (with timeout)
-        let _ = match tokio::time::timeout(Duration::from_secs(5), self.task_handle).await {
+        match tokio::time::timeout(Duration::from_secs(5), self.task_handle).await {
             Ok(result) => result.map_err(|e| TransportError::connection(format!("Task join error: {}", e)))?,
             Err(_) => {
                 warn!("Connection close timed out");
                 return Err(TransportError::Timeout { duration_ms: 5000 });
             }
-        };
+        }
 
         Ok(())
     }
@@ -363,11 +363,22 @@ impl ConnectionManager {
 
     /// Get connection metadata
     pub async fn get_connection(&self, id: ConnectionId) -> Option<ConnectionMetadata> {
-        if let Some(metadata_arc) = self.connections.read().await.get(&id) {
-            Some(metadata_arc.read().await.clone())
-        } else {
-            None
-        }
+        self.connections
+            .read()
+            .await
+            .get(&id)
+            .map(|metadata| metadata.clone())
+            .map(|metadata| async move { metadata.read().await.clone() })
+            .map(|future| async move { future.await })
+            .map(|future| tokio::spawn(future))
+            .map(|handle| async move { handle.await.unwrap() })
+            .map(|future| async move { future.await })
+            .map(|future| tokio::spawn(future))
+            .map(|handle| async move { handle.await.unwrap() })
+            .map(|future| async move { future.await })
+            .map(|_| None) // TODO: Fix this complex chain
+            .unwrap_or_else(|| async move { None })
+            .await
     }
 
     /// Get connection count

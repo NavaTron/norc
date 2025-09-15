@@ -26,8 +26,11 @@ rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 rustls-native-certs = { workspace = true }
 webpki-roots = { workspace = true }
+tokio-rustls = { workspace = true }
+url = { workspace = true }
 
-# Error handling
+# Serialization and utilities
+uuid = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 

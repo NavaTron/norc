@@ -1,21 +1,40 @@
 //! NavaTron NORC Client Core
 //!
-//! Headless client library for NORC protocol.
+//! Headless client library for the NORC protocol providing connection management,
+//! authentication, and message handling capabilities.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use navatron_client_core::{Client, ClientConfig};
+//! use std::time::Duration;
+//!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let config = ClientConfig {
+//!     server_host: "example.com".to_string(),
+//!     server_port: 8443,
+//!     use_tls: true,
+//!     connect_timeout: Duration::from_secs(10),
+//!     ..Default::default()
+//! };
+//!
+//! let client = Client::with_config(config);
+//! client.connect().await?;
+//! client.authenticate().await?;
+//! # Ok(())
+//! # }
+//! ```
 
 #![deny(unsafe_code)]
-#![warn(missing_docs)]
+#![warn(missing_docs, rust_2018_idioms)]
 
-/// Client errors
+/// Client error types
 pub mod error;
 
-/// Client implementation
+/// Client implementation and configuration
 pub mod client;
 
-/// Re-exports
+// Re-exports for convenience
 pub use error::{ClientError, Result};
-pub use client::Client;
-
-/// Placeholder
-pub fn placeholder() {
-    // TODO: Implement client core
-}
+pub use client::{Client, ClientConfig, ClientState, ClientEvent};

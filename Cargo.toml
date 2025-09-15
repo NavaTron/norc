@@ -9,6 +9,7 @@ members = [
     "src/crates/cli",
     "src/bin/client",
     "src/bin/server",
+    "tests/integration",
 ]
 
 [workspace.package]
@@ -50,6 +51,8 @@ rustls-pemfile = "2.0"
 rustls-native-certs = "0.7"
 webpki-roots = "0.26"
 native-tls = "0.2"
+tokio-rustls = "0.25"
+url = "2.4"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
