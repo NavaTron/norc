@@ -292,6 +292,7 @@ The future of organizational communication will be determined by the protocols w
 This repository includes a very small Rust showcase of the first NORC-C step: device registration. It is intentionally minimal (no TLS, auth handshake, or crypto session establishment yet) and is meant as a starting point for future incremental implementation of the full spec.
 
 Implemented subset vs spec:
+* Section 3.1 (scaffold) – rudimentary version negotiation via `/connect`
 * Section 3.2.1 Device Registration (simplified JSON form)
 * In-memory device store keyed by `device_id` (UUID v4)
 * Ed25519 public key validation (hex input, length + curve check)
@@ -303,7 +304,7 @@ Not yet implemented (future work): version negotiation, authentication challenge
 
 ```bash
 cargo run -p server   # Terminal 1
-cargo run -p client   # Terminal 2 (registers a random device)
+cargo run -p client   # Terminal 2 (does /connect then /register)
 ```
 
 Set a custom server URL:
@@ -327,11 +328,12 @@ Example response (pretty printed):
 Restarting the client quickly will create a new random device (new keypair + UUID). To test idempotency, modify the client to reuse a fixed UUID/public key pair.
 
 Roadmap steps for the Rust implementation:
-1. Add version negotiation & capability advertisement
-2. Add authenticated handshake (transcript hash + signatures) per Section 3
-3. Implement ephemeral session key derivation & AEAD framing
-4. Add message_send with per-device key wrapping
-5. Introduce basic federation scaffolding (NORC-F) & trust (NORC-T)
+1. Persist devices (SQLite + sqlx) & capability storage
+2. Expand version negotiation to enforce highest mutual & AMC fallback with transcript hash
+3. Add authenticated handshake (ephemeral X25519, ms derivation) per Section 3
+4. Implement AEAD framing + sequence / hash chaining primitives
+5. Add message_send with per-device key wrapping & simple delivery ack
+6. Introduce basic federation scaffolding (NORC-F) & trust (NORC-T)
 
 ---
 

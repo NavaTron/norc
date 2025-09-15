@@ -1,4 +1,4 @@
-use ed25519_dalek::{SigningKey, VerifyingKey, SECRET_KEY_LENGTH};
+use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -42,6 +42,23 @@ struct DeviceInfoOpt {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Version negotiation first
+    let client_versions = vec!["1.1".to_string(), "1.0".to_string()];
+    let capabilities = vec!["messaging".to_string(), "registration".to_string()];
+    let server = std::env::var("NORC_SERVER").unwrap_or_else(|_| "http://127.0.0.1:8080".into());
+    let connect_url = format!("{server}/connect");
+    let http = reqwest::Client::new();
+    let connect_body = serde_json::json!({
+        "client_versions": client_versions,
+        "preferred_version": "1.1",
+        "capabilities": capabilities,
+    });
+    println!("Negotiating version at {connect_url} ...");
+    let connect_resp = http.post(&connect_url).json(&connect_body).send().await?;
+    let connect_text = connect_resp.text().await?;
+    println!("Connect response: {connect_text}");
+    // (Optionally parse negotiated_version here; keep simple for scaffold)
+
     // Generate identity key pair (Ed25519) for the device
     let signing_key = SigningKey::generate(&mut OsRng);
     let verifying_key: VerifyingKey = signing_key.verifying_key();
@@ -58,7 +75,6 @@ async fn main() -> anyhow::Result<()> {
         },
     };
 
-    let server = std::env::var("NORC_SERVER").unwrap_or_else(|_| "http://127.0.0.1:8080".into());
     let url = format!("{server}/register");
     println!("Registering device {device_id} at {url}");
     let client = reqwest::Client::new();
