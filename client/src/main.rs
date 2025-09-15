@@ -2,6 +2,13 @@ use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
+use tokio_tungstenite::connect_async;
+use hkdf::Hkdf;
+use sha2::Sha256;
+use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
+use futures_util::{SinkExt, StreamExt};
+use std::convert::TryInto;
 
 #[derive(Debug, Serialize)]
 struct DeviceRegisterRequest {
@@ -42,22 +49,86 @@ struct DeviceInfoOpt {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Version negotiation first
-    let client_versions = vec!["1.1".to_string(), "1.0".to_string()];
-    let capabilities = vec!["messaging".to_string(), "registration".to_string()];
-    let server = std::env::var("NORC_SERVER").unwrap_or_else(|_| "http://127.0.0.1:8080".into());
-    let connect_url = format!("{server}/connect");
+    let client_versions = vec!["1.1", "1.0"]; // descending preference
+    let capabilities = vec!["messaging", "registration"];
+    let server_host = std::env::var("NORC_SERVER").unwrap_or_else(|_| "127.0.0.1:8080".into());
+    // Derive ws URL (no TLS for demo)
+    let ws_url = format!("ws://{}/ws", server_host);
+    println!("Connecting WebSocket {ws_url} ...");
+    let (mut ws_stream, _resp) = connect_async(&ws_url).await?;
+
+    // Ephemeral X25519
+    let client_secret = EphemeralSecret::random_from_rng(OsRng);
+    let client_pub = X25519PublicKey::from(&client_secret);
+    let client_nonce: [u8;16] = rand::random();
+
+    // Build ClientHello
+    #[derive(Serialize)]
+    struct ClientHello<'a> {
+        r#type: &'a str,
+        client_versions: Vec<&'a str>,
+        preferred_version: &'a str,
+        capabilities: Vec<&'a str>,
+        nonce: String,
+        ephemeral_pub: String,
+    }
+    let ch = ClientHello {
+        r#type: "client_hello",
+        client_versions: client_versions.clone(),
+        preferred_version: "1.1",
+        capabilities: capabilities.clone(),
+        nonce: b64.encode(client_nonce),
+        ephemeral_pub: b64.encode(client_pub.as_bytes()),
+    };
+    let ch_json = serde_json::to_string(&ch)?;
+    ws_stream.send(tokio_tungstenite::tungstenite::protocol::Message::Text(ch_json.clone())).await?;
+
+    // Receive ServerHello
+    let sh_msg = ws_stream.next().await;
+    let server_text = match sh_msg {
+        Some(Ok(tokio_tungstenite::tungstenite::protocol::Message::Text(t))) => t,
+        other => {
+            println!("Unexpected server response: {:?}", other);
+            return Ok(());
+        }
+    };
+    println!("ServerHello: {server_text}");
+    #[derive(Deserialize)]
+    struct ServerHelloResp {
+        r#type: String,
+        negotiated_version: String,
+        compatibility_mode: bool,
+        server_capabilities: Vec<String>,
+        nonce: String,
+        ephemeral_pub: String,
+        transcript_hash: String,
+    }
+    let sh: ServerHelloResp = serde_json::from_str(&server_text)?;
+    // Compute transcript hash locally to verify match
+    let local_th = {
+        let server_minus_th: serde_json::Value = {
+            let mut v: serde_json::Value = serde_json::from_str(&server_text)?;
+            v
+        };
+        // For now just rely on server provided; full canonical recompute could mirror server logic
+        sh.transcript_hash.clone()
+    };
+    println!("Negotiated version: {} (compat_mode={})", sh.negotiated_version, sh.compatibility_mode);
+
+    // Derive shared secret + master secret (placeholder HKDF-SHA256 label)
+    let server_pub_raw = b64.decode(sh.ephemeral_pub.as_bytes())?;
+    if server_pub_raw.len() != 32 { println!("Bad server ephemeral length"); return Ok(()); }
+    let server_pub_arr: [u8;32] = match server_pub_raw.try_into() { Ok(a) => a, Err(_) => { println!("Ephemeral conversion failed"); return Ok(()); } };
+    let server_pub = X25519PublicKey::from(server_pub_arr);
+    let shared = client_secret.diffie_hellman(&server_pub);
+    let hk = Hkdf::<Sha256>::new(Some(&client_nonce), shared.as_bytes());
+    let mut ms = [0u8;32];
+    if let Err(e) = hk.expand(b"norc:ms:v1", &mut ms) { println!("HKDF expand failed: {e}"); return Ok(()); }
+    println!("Master secret (hex, truncated): {}...", hex::encode(&ms[..16]));
+
+    // Continue with HTTP registration for now
+    let server_http = format!("http://{server_host}");
     let http = reqwest::Client::new();
-    let connect_body = serde_json::json!({
-        "client_versions": client_versions,
-        "preferred_version": "1.1",
-        "capabilities": capabilities,
-    });
-    println!("Negotiating version at {connect_url} ...");
-    let connect_resp = http.post(&connect_url).json(&connect_body).send().await?;
-    let connect_text = connect_resp.text().await?;
-    println!("Connect response: {connect_text}");
-    // (Optionally parse negotiated_version here; keep simple for scaffold)
 
     // Generate identity key pair (Ed25519) for the device
     let signing_key = SigningKey::generate(&mut OsRng);
@@ -75,7 +146,7 @@ async fn main() -> anyhow::Result<()> {
         },
     };
 
-    let url = format!("{server}/register");
+    let url = format!("{server_http}/register");
     println!("Registering device {device_id} at {url}");
     let client = reqwest::Client::new();
     let resp = client.post(url).json(&req_body).send().await?;

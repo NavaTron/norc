@@ -13,3 +13,10 @@ rand = "0.8"
 uuid = { version = "1", features = ["v4", "serde"] }
 hex = "0.4"
 anyhow = "1"
+x25519-dalek = { version = "2" }
+tokio-tungstenite = { version = "0.21", features = ["rustls-tls-native-roots"] }
+futures-util = "0.3"
+blake3 = "1"
+base64 = "0.22"
+hkdf = "0.12"
+sha2 = "0.10"

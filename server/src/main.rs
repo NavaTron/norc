@@ -2,12 +2,21 @@ use std::{collections::HashMap, net::SocketAddr};
 use axum::{routing::post, Router, Json};
 use axum::http::StatusCode;
 use axum::serve; // serve(listener, app)
+use axum::extract::ws::{WebSocketUpgrade, Message, WebSocket};
+use axum::response::IntoResponse;
 use tokio::net::TcpListener;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use uuid::Uuid;
 use ed25519_dalek::VerifyingKey;
+use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
+use rand::rngs::OsRng;
+use blake3;
+use hkdf::Hkdf;
+use sha2::Sha256;
+use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
+use std::convert::TryInto;
 
 // Supported protocol versions (ordered descending preference)
 static SUPPORTED_VERSIONS: &[&str] = &["1.1", "1.0"]; // scaffold
@@ -133,11 +142,126 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/connect", post(connect))
         .route("/register", post(register_device));
+    let app = app.route("/ws", axum::routing::get(ws_handler));
 
     let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
     println!("NORC minimal registration server listening on {addr}");
     let listener = TcpListener::bind(addr).await?;
     serve(listener, app.into_make_service()).await?;
     Ok(())
+}
+
+// ---------------- WebSocket Handshake (NORC-C scaffold) ----------------
+
+#[derive(Deserialize, Serialize, Debug)]
+struct ClientHello {
+    r#type: String, // "client_hello"
+    client_versions: Vec<String>,
+    preferred_version: Option<String>,
+    capabilities: Option<Vec<String>>,
+    nonce: String, // base64 16 bytes
+    ephemeral_pub: String, // base64 X25519 32 bytes
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct ServerHello {
+    r#type: String, // "server_hello"
+    negotiated_version: String,
+    compatibility_mode: bool,
+    server_capabilities: Vec<String>,
+    nonce: String, // base64 16 bytes
+    ephemeral_pub: String, // base64 32 bytes
+    transcript_hash: String, // base64 32 bytes (BLAKE3)
+}
+
+async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse { ws.on_upgrade(handle_ws) }
+
+async fn handle_ws(mut socket: WebSocket) {
+    // Expect first message ClientHello JSON text
+    let Some(Ok(Message::Text(txt))) = socket.recv().await else { return; };
+    let parsed: Result<ClientHello, _> = serde_json::from_str(&txt);
+    let client_hello = match parsed { Ok(c) => c, Err(_) => { let _ = socket.send(Message::Close(None)).await; return; } };
+    if client_hello.r#type != "client_hello" { let _ = socket.send(Message::Close(None)).await; return; }
+
+    // Version negotiation similar to /connect
+    let mut chosen: Option<&str> = None;
+    for v in SUPPORTED_VERSIONS.iter() { if client_hello.client_versions.iter().any(|cv| cv == v) { chosen = Some(v); break; } }
+    if chosen.is_none() {
+        for sv in SUPPORTED_VERSIONS.iter() { if client_hello.client_versions.iter().any(|cv| is_adjacent_major(cv, sv)) { chosen = Some(sv); break; }}
+    }
+    let negotiated = chosen.unwrap_or(SUPPORTED_VERSIONS.last().cloned().unwrap());
+    let compatibility_mode = !(negotiated == SUPPORTED_VERSIONS[0] && client_hello.client_versions.iter().any(|c| c == SUPPORTED_VERSIONS[0]));
+
+    // Ephemeral X25519
+    let server_secret = EphemeralSecret::random_from_rng(OsRng);
+    let server_pub = X25519PublicKey::from(&server_secret);
+    let client_pub_raw = match b64.decode(client_hello.ephemeral_pub.as_bytes()) { Ok(b) => b, Err(_) => { let _ = socket.send(Message::Close(None)).await; return;} };
+    if client_pub_raw.len() != 32 { let _ = socket.send(Message::Close(None)).await; return; }
+    let client_pub_arr: [u8;32] = match client_pub_raw.try_into() { Ok(a) => a, Err(_) => { let _ = socket.send(Message::Close(None)).await; return; } };
+    let client_pub = X25519PublicKey::from(client_pub_arr);
+    let shared = server_secret.diffie_hellman(&client_pub);
+
+    // Transcript: canonical concat of JSON (client then server minus transcript field) using sorted keys of original string & provisional server fields
+    let server_nonce = random_nonce();
+    // Build preliminary server hello without transcript hash
+    let pre_server = serde_json::json!({
+        "type": "server_hello",
+        "negotiated_version": negotiated,
+        "compatibility_mode": compatibility_mode,
+        "server_capabilities": SERVER_CAPABILITIES,
+        "nonce": base64::engine::general_purpose::STANDARD.encode(&server_nonce),
+        "ephemeral_pub": b64.encode(server_pub.as_bytes()),
+    });
+    let transcript_material = format!("{}{}", canonical(&txt), canonical(&pre_server.to_string()));
+    let th_bytes = blake3::hash(transcript_material.as_bytes()).as_bytes().to_vec();
+    let th_b64 = b64.encode(&th_bytes);
+
+    // Derive master secret (HKDF-SHA256 for demo; spec uses HKDF with domain label + BLAKE3 by default; this is placeholder)
+    let hk = Hkdf::<Sha256>::new(Some(&client_nonce_bytes(&client_hello.nonce)), shared.as_bytes());
+    let mut ms = [0u8;32];
+    if hk.expand(b"norc:ms:v1", &mut ms).is_err() { let _ = socket.send(Message::Close(None)).await; return; }
+
+    let server_hello = ServerHello {
+        r#type: "server_hello".into(),
+        negotiated_version: negotiated.to_string(),
+        compatibility_mode,
+        server_capabilities: SERVER_CAPABILITIES.iter().map(|s| s.to_string()).collect(),
+        nonce: b64.encode(server_nonce),
+        ephemeral_pub: b64.encode(server_pub.as_bytes()),
+        transcript_hash: th_b64.clone(),
+    };
+
+    let _ = socket.send(Message::Text(serde_json::to_string(&server_hello).unwrap())).await;
+
+    // Optionally: wait for a follow-up message (e.g. device_register) (not implemented here)
+}
+
+fn random_nonce() -> [u8;16] { rand::random::<[u8;16]>() }
+
+fn client_nonce_bytes(b64s: &str) -> Vec<u8> { b64.decode(b64s.as_bytes()).unwrap_or_default() }
+
+// Simplistic canonicalization: parse -> serde_json::Value -> sort keys recursively -> reserialize
+fn canonical(input: &str) -> String {
+    match serde_json::from_str::<serde_json::Value>(input) {
+        Ok(v) => canonical_value(&v),
+        Err(_) => input.to_string(),
+    }
+}
+
+fn canonical_value(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::Object(map) => {
+            let mut keys: Vec<_> = map.keys().collect();
+            keys.sort();
+            let mut parts = Vec::new();
+            for k in keys { parts.push(format!("\"{}\":{}", k, canonical_value(&map[k]))); }
+            format!("{{{}}}", parts.join(","))
+        }
+        serde_json::Value::Array(arr) => {
+            let inner: Vec<_> = arr.iter().map(canonical_value).collect();
+            format!("[{}]", inner.join(","))
+        }
+        _ => v.to_string(),
+    }
 }
 
