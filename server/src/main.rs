@@ -14,13 +14,22 @@ use rand::rngs::OsRng;
 use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
 use std::convert::TryInto;
 use norc_core::{ClientHello, ServerHello, SUPPORTED_VERSIONS, negotiate_version, compute_transcript_hash, derive_master_secret, DeviceRegisterRequest, RegisterResponse, RegisteredDevice, derive_session_keys, aead_encrypt, aead_decrypt, AeadDirection, SessionKeys, NorcMessage, next_nonce};
-use tracing::{info, debug};
+use tracing::{info, debug, warn};
+use tokio_tungstenite::{connect_async, tungstenite};
 use futures_util::{StreamExt, SinkExt};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 
 // Supported protocol versions (ordered descending preference)
 // Supported versions now provided by norc_core; local server capabilities remain here.
-static SERVER_CAPABILITIES: &[&str] = &["messaging", "registration"]; // minimal example
+static SERVER_CAPABILITIES: &[&str] = &["messaging", "registration", "federation"]; // added federation capability
+
+// Federation peers: lazy parsed from NORC_FED_PEERS="host1:port,host2:port"
+static FED_PEERS: Lazy<Vec<String>> = Lazy::new(|| {
+    std::env::var("NORC_FED_PEERS")
+        .ok()
+        .map(|s| s.split(',').filter(|p| !p.trim().is_empty()).map(|p| p.trim().to_string()).collect())
+        .unwrap_or_else(|| Vec::new())
+});
 
 // Global in-memory store (bear minimal; in production use persistent storage)
 static DEVICE_STORE: Lazy<Mutex<HashMap<Uuid, RegisteredDevice>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -251,6 +260,15 @@ async fn handle_ws(mut socket: WebSocket) {
                                 debug!(from = %dev_id, len = body.len(), "Inbound plaintext chat");
                                 broadcast_plain(&body, dev_id);
                             }
+                            NorcMessage::FederationForward { origin, nonce, ciphertext_b64, hops } => {
+                                // Accept federated ciphertext and rebroadcast to local sessions (except origin) if hop limit not exceeded
+                                if hops > 4 { // simple hop guard
+                                    warn!(%origin, hops, "Dropping federated message (hop limit)");
+                                } else {
+                                    debug!(%origin, hops, "Inbound federated forward");
+                                    broadcast_federated_cipher(&origin, nonce, &ciphertext_b64, hops + 1);
+                                }
+                            }
                         }
                     }
                 }
@@ -279,6 +297,55 @@ fn broadcast_plain(plaintext: &str, from: Uuid) {
     }
     for (tx, json) in to_send.iter() { let _ = tx.send(Message::Text(json.clone())); }
     if !to_send.is_empty() { debug!(recipients = to_send.len(), from = %from, len = plaintext.len(), "Broadcasted chat"); }
+    // Forward to federation peers (ciphertexts per local recipient differ; choose first as canonical or re-encrypt?)
+    // For stub simplicity: re-encrypt once under a temporary keyless assumption: pick first ciphertext if present
+    if let Some((_tx,_orig_json)) = to_send.first() {
+        // Parse the first NorcMessage::ChatCiphertext JSON so we can wrap
+        if let Ok(parsed) = serde_json::from_str::<NorcMessage>(&to_send[0].1) {
+            if let NorcMessage::ChatCiphertext { sender, nonce, ciphertext_b64 } = parsed {
+                forward_to_peers(sender, nonce, &ciphertext_b64, 0);
+            }
+        }
+    }
+}
+
+fn broadcast_federated_cipher(origin: &Uuid, nonce: u64, ciphertext_b64: &str, hops: u8) {
+    // Deliver to local sessions (same logic as ChatCiphertext broadcast but without decrypting)
+    let mut to_send: Vec<(Tx, String)> = Vec::new();
+    {
+        let sessions = SESSIONS.lock().unwrap();
+        for (dev, session) in sessions.iter() {
+            if *dev == *origin { continue; }
+            // Wrap the ciphertext as if it came from origin (already encrypted for somebody else originally, so may not decrypt) --
+            // For a proper design we'd have per-server shared secrets; this is a stub.
+            let fwd = NorcMessage::ChatCiphertext { sender: *origin, nonce, ciphertext_b64: ciphertext_b64.to_string() };
+            to_send.push((session.tx.clone(), serde_json::to_string(&fwd).unwrap()));
+        }
+    }
+    for (tx, json) in to_send { let _ = tx.send(Message::Text(json)); }
+    if !FED_PEERS.is_empty() {
+        // Continue forwarding if hops still acceptable
+        if hops <= 4 { forward_to_peers(*origin, nonce, ciphertext_b64, hops); }
+    }
+}
+
+fn forward_to_peers(origin: Uuid, nonce: u64, ciphertext_b64: &str, hops: u8) {
+    if FED_PEERS.is_empty() { return; }
+    let msg = NorcMessage::FederationForward { origin, nonce, ciphertext_b64: ciphertext_b64.to_string(), hops };
+    let json = match serde_json::to_string(&msg) { Ok(j)=>j, Err(_)=>return };
+    for peer in FED_PEERS.iter() {
+        let peer = peer.clone();
+        let json_clone = json.clone();
+        tokio::spawn(async move {
+            let url = format!("ws://{peer}/ws");
+            match connect_async(&url).await {
+                Ok((mut stream, _resp)) => {
+                    if let Err(e) = stream.send(tungstenite::Message::Text(json_clone)).await { warn!(%peer, error=%e.to_string(), "Failed sending federated frame"); }
+                }
+                Err(e) => warn!(%peer, error=%e.to_string(), "Federation connection failed"),
+            }
+        });
+    }
 }
 
 // Removed local canonicalization helpers (in norc_core now)

@@ -178,6 +178,13 @@ pub enum NorcMessage {
     ChatCiphertext { sender: uuid::Uuid, nonce: u64, ciphertext_b64: String },
     #[serde(rename = "chat_plain")]
     ChatPlain { body: String },
+    #[serde(rename = "federation_forward")]
+    FederationForward {
+        origin: uuid::Uuid,          // original sender device id
+        nonce: u64,                  // original nonce
+        ciphertext_b64: String,      // same ciphertext
+        hops: u8,                    // hop count (simple loop guard)
+    },
 }
 
 pub const MAX_CHAT_NONCE: u64 = u64::MAX - 1; // Reserve last value for rollover guard
