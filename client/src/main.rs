@@ -7,7 +7,8 @@ use tokio_tungstenite::connect_async;
 use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
 use futures_util::{SinkExt, StreamExt};
 use std::convert::TryInto;
-use norc_core::{ClientHello as CoreClientHello, derive_master_secret, derive_session_keys};
+use norc_core::{ClientHello as CoreClientHello, derive_master_secret, derive_session_keys, aead_decrypt, AeadDirection};
+use tokio_tungstenite::tungstenite::protocol::Message;
 
 // Structures for WS registration round-trip
 #[derive(Debug, serde::Serialize)]
@@ -194,6 +195,12 @@ async fn main() -> anyhow::Result<()> {
                     WsRegisterInner::Registered { device } | WsRegisterInner::AlreadyRegistered { device } => {
                         println!("Register response status consumed (type={})", resp.r#type);
                         log_server_device(&device);
+                        // After registration, send a demo plaintext chat message
+                        let chat_plain = serde_json::json!({
+                            "type": "chat_plain",
+                            "body": format!("hello from {}", &device.device_id.to_string()[..8])
+                        });
+                        ws_stream.send(Message::Text(chat_plain.to_string())).await.ok();
                     }
                     WsRegisterInner::InvalidKey { message } => {
                         println!("Registration failed (type={}) message={}", resp.r#type, message);
@@ -206,6 +213,29 @@ async fn main() -> anyhow::Result<()> {
         }
     } else {
         println!("No WS register response received");
+    }
+
+    // Listen briefly for broadcast ciphertexts (single message demo)
+    if let Some(Ok(Message::Text(incoming))) = ws_stream.next().await {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&incoming) {
+            if val.get("type").and_then(|t| t.as_str()) == Some("chat_ciphertext") {
+                if let (Some(nonce), Some(ct_b64)) = (val.get("nonce").and_then(|n| n.as_u64()), val.get("ciphertext_b64").and_then(|c| c.as_str())) {
+                    let ct = b64.decode(ct_b64.as_bytes()).unwrap_or_default();
+                    // We previously derived session keys only if transcript hash length was 32; replicate derivation
+                    if let Ok(sh_json) = serde_json::from_str::<serde_json::Value>(&server_text) {
+                        if let Some(th) = sh_json.get("transcript_hash").and_then(|t| t.as_str()) {
+                            if let Ok(th_raw) = b64.decode(th) { if th_raw.len()==32 {
+                                let mut th_arr=[0u8;32]; th_arr.copy_from_slice(&th_raw);
+                                let session_keys = derive_session_keys(&ms, &th_arr);
+                                if let Ok(plaintext) = aead_decrypt(AeadDirection::ServerToClient, &session_keys, nonce, &ct, b"chat") {
+                                    if let Ok(s) = String::from_utf8(plaintext) { println!("Received chat: {}", s); }
+                                }
+                            }}
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Ok(())

@@ -22,3 +22,4 @@ x25519-dalek = { version = "2" }
 base64 = "0.22"
 hkdf = "0.12"
 sha2 = "0.10"
+futures-util = "0.3"

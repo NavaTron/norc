@@ -13,7 +13,8 @@ use ed25519_dalek::VerifyingKey;
 use rand::rngs::OsRng;
 use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
 use std::convert::TryInto;
-use norc_core::{ClientHello, ServerHello, SUPPORTED_VERSIONS, negotiate_version, compute_transcript_hash, derive_master_secret, DeviceRegisterRequest, RegisterResponse, RegisteredDevice, derive_session_keys};
+use norc_core::{ClientHello, ServerHello, SUPPORTED_VERSIONS, negotiate_version, compute_transcript_hash, derive_master_secret, DeviceRegisterRequest, RegisterResponse, RegisteredDevice, derive_session_keys, aead_encrypt, AeadDirection};
+use futures_util::{StreamExt, SinkExt};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 
 // Supported protocol versions (ordered descending preference)
@@ -22,6 +23,17 @@ static SERVER_CAPABILITIES: &[&str] = &["messaging", "registration"]; // minimal
 
 // Global in-memory store (bear minimal; in production use persistent storage)
 static DEVICE_STORE: Lazy<Mutex<HashMap<Uuid, RegisteredDevice>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+// Active websocket sessions for broadcast (device_id -> sender channel)
+type Tx = tokio::sync::mpsc::UnboundedSender<Message>;
+static SESSIONS: Lazy<Mutex<HashMap<Uuid, Tx>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ChatCiphertext {
+    r#type: String, // "chat_ciphertext"
+    sender: Uuid,
+    nonce: u64,
+    ciphertext_b64: String,
+}
 
 // (Removed local duplicate protocol structs; using norc_core types)
 
@@ -165,8 +177,20 @@ async fn handle_ws(mut socket: WebSocket) {
 
     let _ = socket.send(Message::Text(serde_json::to_string(&server_hello).unwrap())).await;
 
+    // Wrap socket with channel for broadcast
+    let (mut ws_sender, mut ws_receiver) = socket.split();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Message>();
+    // For now we don't know device_id until registration; stash provisional None
+    let mut device_id_opt: Option<Uuid> = None;
+    // Forward outgoing messages task
+    tokio::spawn(async move {
+        while let Some(msg) = rx.recv().await {
+            let _ = ws_sender.send(msg).await;
+        }
+    });
+
     // Await optional device registration over WS
-    if let Some(Ok(Message::Text(reg_txt))) = socket.recv().await {
+    if let Some(Ok(Message::Text(reg_txt))) = ws_receiver.next().await {
         #[derive(Deserialize)]
         struct WsDeviceRegister {
             r#type: String,
@@ -187,10 +211,64 @@ async fn handle_ws(mut socket: WebSocket) {
                     #[serde(flatten)]
                     inner: RegisterResponse,
                 }
-                let outbound = WsRegisterResponse { r#type: "register_response", inner: resp };
-                let _ = socket.send(Message::Text(serde_json::to_string(&outbound).unwrap())).await;
+                let outbound = WsRegisterResponse { r#type: "register_response", inner: resp.clone() };
+                let _ = tx.send(Message::Text(serde_json::to_string(&outbound).unwrap()));
+                // Store session for broadcast if registered
+                if let RegisterResponse::Registered { device } | RegisterResponse::AlreadyRegistered { device } = resp {
+                    device_id_opt = Some(device.device_id);
+                    SESSIONS.lock().unwrap().insert(device.device_id, tx.clone());
+                }
             }
         }
+    }
+
+    // If registered, begin chat loop
+    if let Some(dev_id) = device_id_opt {
+        let mut c2s_nonce: u64 = 0;
+        let mut s2c_nonce: u64 = 0; // server side tracks broadcast nonce per connection (placeholder, not persisted)
+        while let Some(msg_res) = ws_receiver.next().await {
+            let Ok(msg) = msg_res else { break };
+            match msg {
+                Message::Text(txt) => {
+                    // Expect JSON with either chat_plain or chat_ciphertext (future). For MVP accept plaintext.
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&txt) {
+                        if val.get("type").and_then(|t| t.as_str()) == Some("chat_plain") {
+                            if let Some(ptext) = val.get("body").and_then(|b| b.as_str()) {
+                                c2s_nonce = c2s_nonce.wrapping_add(1);
+                                // Encrypt for broadcast using server_to_client_key direction
+                                let ciphertext = aead_encrypt(
+                                    AeadDirection::ServerToClient,
+                                    &session_keys,
+                                    s2c_nonce,
+                                    ptext.as_bytes(),
+                                    b"chat"
+                                ).unwrap_or_default();
+                                s2c_nonce = s2c_nonce.wrapping_add(1);
+                                let msg = ChatCiphertext {
+                                    r#type: "chat_ciphertext".into(),
+                                    sender: dev_id,
+                                    nonce: s2c_nonce - 1,
+                                    ciphertext_b64: b64.encode(ciphertext),
+                                };
+                                broadcast_chat(msg, dev_id);
+                            }
+                        }
+                    }
+                }
+                Message::Close(_) => break,
+                _ => {}
+            }
+        }
+        // Remove session on exit
+        SESSIONS.lock().unwrap().remove(&dev_id);
+    }
+}
+
+fn broadcast_chat(msg: ChatCiphertext, from: Uuid) {
+    let json = serde_json::to_string(&msg).unwrap();
+    let sessions = SESSIONS.lock().unwrap();
+    for (dev, tx) in sessions.iter() {
+        if *dev != from { let _ = tx.send(Message::Text(json.clone())); }
     }
 }
 
