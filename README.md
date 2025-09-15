@@ -287,53 +287,76 @@ The future of organizational communication will be determined by the protocols w
 
 ---
 
-## Minimal Rust Demo (Device Registration Prototype)
+## Minimal Rust Demo (WebSocket Handshake + Device Registration Prototype)
 
-This repository includes a very small Rust showcase of the first NORC-C step: device registration. It is intentionally minimal (no TLS, auth handshake, or crypto session establishment yet) and is meant as a starting point for future incremental implementation of the full spec.
+This repository now includes a minimal Rust prototype implementing the early NORC-C connection flow over WebSocket plus device registration on the established channel. It is intentionally incomplete (no AEAD message encryption, no federation, no persistence, no trust layer) and serves as a scaffold for further development.
 
-Implemented subset vs spec:
-* Section 3.1 (scaffold) – rudimentary version negotiation via `/connect`
-* Section 3.2.1 Device Registration (simplified JSON form)
-* In-memory device store keyed by `device_id` (UUID v4)
-* Ed25519 public key validation (hex input, length + curve check)
-* Idempotent behavior: second registration of same `device_id` returns `already_registered`
+### Implemented (Prototype Scope)
+* Section 3.1 (scaffold): version negotiation (highest mutual + adjacent-major fallback) during `client_hello` → `server_hello` over `/ws`
+* Transcript hash (BLAKE3) over canonical JSON of client + provisional server hello
+* Ephemeral X25519 Diffie-Hellman and placeholder HKDF-SHA256 master secret derivation (spec will shift to HKDF-BLAKE3 + domain separation)
+* Device registration (`device_register`) sent as a JSON message after handshake on the same WebSocket (no longer using HTTP fallback in the client)
+* In-memory device store keyed by `device_id` (UUID v4) with idempotent semantics
+* Shared protocol primitives extracted into `norc_core` crate (`ClientHello`, `ServerHello`, registration types, negotiation helpers)
 
-Not yet implemented (future work): version negotiation, authentication challenge, session key establishment, message send, federation, trust, replay protection, audit chaining.
+### Not Yet Implemented
+* AEAD traffic key derivation and encrypted chat frames
+* Sequence numbers, replay protection, rolling transcript binding
+* Persistent storage (e.g., SQLite / sqlx)
+* Federation (NORC-F) or trust governance (NORC-T)
+* Hybrid PQ key exchange (currently only classical X25519)
+* Registration attestation / signature binding to long-term identity
+* CLI interactive chat or pretty / colored terminal output
 
-### Run the demo
+### Running the Prototype
 
 ```bash
-cargo run -p server   # Terminal 1
-cargo run -p client   # Terminal 2 (does /connect then /register)
+cargo run -p server   # Terminal 1: starts HTTP+WS server on 127.0.0.1:8080
+cargo run -p client   # Terminal 2: performs WS handshake then device_register
 ```
 
-Set a custom server URL:
+Specify an alternate host/port (no scheme needed for WS as it defaults to ws://):
 ```bash
-NORC_SERVER=http://127.0.0.1:8080 cargo run -p client
+set NORC_SERVER=192.168.1.50:8080  # Windows PowerShell example
+cargo run -p client
+```
+or (Unix shells):
+```bash
+NORC_SERVER=192.168.1.50:8080 cargo run -p client
 ```
 
-Example response (pretty printed):
-```json
-{
-	"status": "registered",
-	"device": {
-		"device_id": "c2c7b2d6-7e9a-4b84-8b19-2b0b6c0c1234",
-		"public_key": "ab4f...",
-		"device_info": {"name": "Dev-c2c7b2d6", "type": "desktop", "capabilities": ["messaging"]},
-		"first_registered_timestamp": 1726400000
-	}
-}
+### Sample Output (Truncated)
+
+```
+Connecting WebSocket ws://127.0.0.1:8080/ws ...
+ServerHello: {"type":"server_hello","negotiated_version":"1.1", ... "transcript_hash":"BASE64..."}
+Negotiated version: 1.1 (compat_mode=false)
+Master secret (hex, truncated): 8f3a2c1d94e0b7aa4d9c6e12ab56f0cd...
+Sending device_register over WS (device_id=9a2f3d2c-....)
+Register response: Registered { device: WsServerDevice { ... } }
 ```
 
-Restarting the client quickly will create a new random device (new keypair + UUID). To test idempotency, modify the client to reuse a fixed UUID/public key pair.
+### Core Crate (`norc_core`)
+The new `norc_core` library crate centralizes shared protocol structures and helpers to reduce duplication and ease future refactors:
+* Version negotiation (`negotiate_version`, `SUPPORTED_VERSIONS`)
+* Canonical JSON and transcript hash (`compute_transcript_hash`)
+* Handshake message structs (`ClientHello`, `ServerHello`)
+* Registration message structs (`DeviceRegisterRequest`, `RegisterResponse`, `RegisteredDevice`)
+* Placeholder key derivation (`derive_master_secret`)
 
-Roadmap steps for the Rust implementation:
-1. Persist devices (SQLite + sqlx) & capability storage
-2. Expand version negotiation to enforce highest mutual & AMC fallback with transcript hash
-3. Add authenticated handshake (ephemeral X25519, ms derivation) per Section 3
-4. Implement AEAD framing + sequence / hash chaining primitives
-5. Add message_send with per-device key wrapping & simple delivery ack
-6. Introduce basic federation scaffolding (NORC-F) & trust (NORC-T)
+This separation enables the next phases (encrypted messaging, federation, trust) to evolve without duplicating logic across client/server binaries.
+
+### Next Planned Steps (Rust Implementation Roadmap)
+1. Replace placeholder HKDF-SHA256 with HKDF-BLAKE3 + domain labels; derive directional traffic keys
+2. Implement AEAD frame format (e.g., ChaCha20-Poly1305) with sequence numbers and transcript/chain binding
+3. Persist device + session state (SQLite via `sqlx` or `sled`) and add basic migration
+4. Add interactive CLI chat loop in client (plaintext locally, encrypted on wire)
+5. Introduce simple local broadcast (multi-client) and then federation stub (server-to-server relaying)
+6. Integrate trust scaffolding: preliminary trust graph + revocation propagation
+7. Add hybrid PQ key exchange (X25519 + future Kyber encapsulation) and negotiation of PQ capability
+8. End-to-end test suite + property tests for canonicalization & negotiation
+
+> NOTE: Until AEAD framing is implemented, all post-handshake messages (other than the initial registration) are intentionally omitted to avoid giving a false impression of security completeness.
 
 ---
 

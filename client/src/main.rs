@@ -1,47 +1,56 @@
+#![allow(dead_code)] // Temporary: suppress unused field warnings for serde structs during early prototype
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use uuid::Uuid;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 use tokio_tungstenite::connect_async;
-use hkdf::Hkdf;
-use sha2::Sha256;
 use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
 use futures_util::{SinkExt, StreamExt};
 use std::convert::TryInto;
+use norc_core::{ClientHello as CoreClientHello, derive_master_secret};
 
-#[derive(Debug, Serialize)]
-struct DeviceRegisterRequest {
+// Structures for WS registration round-trip
+#[derive(Debug, serde::Serialize)]
+struct WsDeviceRegister {
+    r#type: &'static str,
     device_id: Uuid,
-    public_key: String, // hex encoded
-    device_info: DeviceInfo,
+    public_key: String,
+    device_info: WsDeviceInfo,
 }
 
-#[derive(Debug, Serialize)]
-struct DeviceInfo {
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct WsDeviceInfo {
     name: String,
     r#type: String,
     capabilities: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
-enum RegisterResponse {
-    Registered { device: ServerDevice },
-    AlreadyRegistered { device: ServerDevice },
+enum WsRegisterInner {
+    Registered { device: WsServerDevice },
+    AlreadyRegistered { device: WsServerDevice },
     InvalidKey { message: String },
 }
 
-#[derive(Debug, Deserialize)]
-struct ServerDevice {
+#[derive(Debug, serde::Deserialize)]
+struct WsRegisterResponse {
+    r#type: String,
+    #[serde(flatten)]
+    inner: WsRegisterInner,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct WsServerDevice {
     device_id: Uuid,
     public_key: String,
-    device_info: Option<DeviceInfoOpt>,
+    device_info: Option<WsDeviceInfoOpt>,
     first_registered_timestamp: i64,
 }
 
-#[derive(Debug, Deserialize)]
-struct DeviceInfoOpt {
+#[derive(Debug, serde::Deserialize)]
+struct WsDeviceInfoOpt {
     name: Option<String>,
     r#type: Option<String>,
     capabilities: Option<Vec<String>>,
@@ -62,21 +71,12 @@ async fn main() -> anyhow::Result<()> {
     let client_pub = X25519PublicKey::from(&client_secret);
     let client_nonce: [u8;16] = rand::random();
 
-    // Build ClientHello
-    #[derive(Serialize)]
-    struct ClientHello<'a> {
-        r#type: &'a str,
-        client_versions: Vec<&'a str>,
-        preferred_version: &'a str,
-        capabilities: Vec<&'a str>,
-        nonce: String,
-        ephemeral_pub: String,
-    }
-    let ch = ClientHello {
-        r#type: "client_hello",
-        client_versions: client_versions.clone(),
-        preferred_version: "1.1",
-        capabilities: capabilities.clone(),
+    // Build ClientHello using norc_core shape (convert &str vecs to owned Strings)
+    let ch = CoreClientHello {
+        r#type: "client_hello".to_string(),
+        client_versions: client_versions.iter().map(|s| s.to_string()).collect(),
+        preferred_version: Some("1.1".to_string()),
+        capabilities: Some(capabilities.iter().map(|s| s.to_string()).collect()),
         nonce: b64.encode(client_nonce),
         ephemeral_pub: b64.encode(client_pub.as_bytes()),
     };
@@ -105,14 +105,7 @@ async fn main() -> anyhow::Result<()> {
     }
     let sh: ServerHelloResp = serde_json::from_str(&server_text)?;
     // Compute transcript hash locally to verify match
-    let local_th = {
-        let server_minus_th: serde_json::Value = {
-            let mut v: serde_json::Value = serde_json::from_str(&server_text)?;
-            v
-        };
-        // For now just rely on server provided; full canonical recompute could mirror server logic
-        sh.transcript_hash.clone()
-    };
+    // Accept server transcript hash (client-side recompute can be added later)
     println!("Negotiated version: {} (compat_mode={})", sh.negotiated_version, sh.compatibility_mode);
 
     // Derive shared secret + master secret (placeholder HKDF-SHA256 label)
@@ -121,47 +114,39 @@ async fn main() -> anyhow::Result<()> {
     let server_pub_arr: [u8;32] = match server_pub_raw.try_into() { Ok(a) => a, Err(_) => { println!("Ephemeral conversion failed"); return Ok(()); } };
     let server_pub = X25519PublicKey::from(server_pub_arr);
     let shared = client_secret.diffie_hellman(&server_pub);
-    let hk = Hkdf::<Sha256>::new(Some(&client_nonce), shared.as_bytes());
-    let mut ms = [0u8;32];
-    if let Err(e) = hk.expand(b"norc:ms:v1", &mut ms) { println!("HKDF expand failed: {e}"); return Ok(()); }
+    let ms = derive_master_secret(&b64.encode(client_nonce), shared.as_bytes());
     println!("Master secret (hex, truncated): {}...", hex::encode(&ms[..16]));
 
-    // Continue with HTTP registration for now
-    let server_http = format!("http://{server_host}");
-    let http = reqwest::Client::new();
-
-    // Generate identity key pair (Ed25519) for the device
+    // Perform device registration over WS
     let signing_key = SigningKey::generate(&mut OsRng);
     let verifying_key: VerifyingKey = signing_key.verifying_key();
     let public_key_hex = hex::encode(verifying_key.to_bytes());
-
     let device_id = Uuid::new_v4();
-    let req_body = DeviceRegisterRequest {
+    let reg = WsDeviceRegister {
+        r#type: "device_register",
         device_id,
         public_key: public_key_hex,
-        device_info: DeviceInfo {
+        device_info: WsDeviceInfo {
             name: format!("Dev-{}", &device_id.to_string()[..8]),
             r#type: "desktop".into(),
-            capabilities: vec!["messaging".into()],
+            capabilities: vec!["messaging".into(), "registration".into()],
         },
     };
+    let reg_json = serde_json::to_string(&reg)?;
+    println!("Sending device_register over WS (device_id={device_id})");
+    ws_stream.send(tokio_tungstenite::tungstenite::protocol::Message::Text(reg_json)).await?;
 
-    let url = format!("{server_http}/register");
-    println!("Registering device {device_id} at {url}");
-    let client = reqwest::Client::new();
-    let resp = client.post(url).json(&req_body).send().await?;
-
-    let status = resp.status();
-    let text = resp.text().await?;
-    let parsed: Result<RegisterResponse, _> = serde_json::from_str(&text);
-    match parsed {
-        Ok(r) => {
-            println!("Server HTTP status: {status}");
-            println!("Response: {:#?}", r);
+    if let Some(Ok(tokio_tungstenite::tungstenite::protocol::Message::Text(reg_resp_txt))) = ws_stream.next().await {
+        match serde_json::from_str::<WsRegisterResponse>(&reg_resp_txt) {
+            Ok(resp) => {
+                println!("Register response: {:#?}", resp.inner);
+            }
+            Err(e) => {
+                eprintln!("Failed to parse WS register response: {e}\nRaw: {reg_resp_txt}");
+            }
         }
-        Err(e) => {
-            eprintln!("Failed to parse response: {e}\nRaw: {text}");
-        }
+    } else {
+        println!("No WS register response received");
     }
 
     Ok(())

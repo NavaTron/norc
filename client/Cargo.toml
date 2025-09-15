@@ -20,3 +20,4 @@ blake3 = "1"
 base64 = "0.22"
 hkdf = "0.12"
 sha2 = "0.10"
+norc_core = { path = "../norc_core" }
