@@ -3,12 +3,12 @@
 //! Provides reproducible developer workflows decoupled from user-facing crates.
 //! Inspired by the community 'xtask' pattern.
 //!
-//! Commands (initial):
-//! - ci: run fmt, clippy (deny warnings), tests
+//! Commands:
+//! - ci: run fmt, clippy (deny warnings), tests, cargo-deny, (optional) cargo-audit
 //! - lint: run clippy + format check
-//! - audit: (placeholder) security audits (cargo-audit / cargo-deny future)
-//! - coverage: (placeholder) produce coverage report
-//! - bench: (placeholder) run criterion benches
+//! - audit: run cargo-deny + cargo-audit (if installed)
+//! - coverage: produce coverage report with cargo-llvm-cov (if installed)
+//! - bench: run criterion benches (once added)
 
 #![forbid(unsafe_code)]
 
@@ -34,7 +34,7 @@ pub enum XtaskCommand {
     Ci,
     /// Run clippy & format check only
     Lint,
-    /// Security auditing (placeholder)
+    /// Security auditing (cargo-deny + optional cargo-audit)
     Audit,
     /// Generate coverage report (placeholder)
     Coverage,
@@ -61,12 +61,16 @@ fn init_tracing() {
 }
 
 fn ci_pipeline() -> Result<()> {
-    info!("step=fmt");
+    info!(step = "fmt");
     run("cargo", &["fmt", "--", "--check"], None)?;
-    info!("step=clippy");
+    info!(step = "clippy");
     run("cargo", &["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"], None)?;
-    info!("step=test");
+    info!(step = "test");
     run("cargo", &["test", "--all"], None)?;
+    info!(step = "deny");
+    if let Err(e) = run("cargo", &["deny", "check"], None) { error!(error=?e, "cargo-deny failed"); return Err(e); }
+    info!(step = "audit(optional)");
+    let _ = run_optional("cargo", &["audit"], None);
     info!("ci pipeline complete");
     Ok(())
 }
@@ -78,17 +82,23 @@ fn lint_only() -> Result<()> {
 }
 
 fn audit() -> Result<()> {
-    info!("audit placeholder - integrate cargo-audit / cargo-deny later");
+    info!(step = "cargo-deny");
+    run("cargo", &["deny", "check"], None)?;
+    info!(step = "cargo-audit(optional)");
+    let _ = run_optional("cargo", &["audit"], None);
     Ok(())
 }
 
 fn coverage() -> Result<()> {
-    info!("coverage placeholder - integrate cargo-llvm-cov later");
+    info!(step = "llvm-cov");
+    // Typical invocation: cargo llvm-cov --workspace --html
+    let _ = run_optional("cargo", &["llvm-cov", "--workspace", "--fail-under-lines", "70"], None)?;
     Ok(())
 }
 
 fn bench() -> Result<()> {
-    info!("bench placeholder - integrate criterion benches later");
+    info!(step = "bench" );
+    let _ = run_optional("cargo", &["bench"], None)?; // Will succeed once benches exist
     Ok(())
 }
 
@@ -100,4 +110,14 @@ fn run(cmd: &str, args: &[&str], cwd: Option<&PathBuf>) -> Result<()> {
     let status = command.status().map_err(|e| anyhow!("spawn {cmd}: {e}"))?;
     if !status.success() { return Err(anyhow!("command {cmd} failed with status {status}")); }
     Ok(())
+}
+
+fn run_optional(cmd: &str, args: &[&str], cwd: Option<&PathBuf>) -> Result<()> {
+    match run(cmd, args, cwd) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            info!(command=%cmd, ?args, "optional step skipped or failed");
+            Err(e)
+        }
+    }
 }
