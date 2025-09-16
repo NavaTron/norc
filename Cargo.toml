@@ -7,6 +7,7 @@ members = [
     "src/crates/server-core",
     "src/crates/tui",
     "src/crates/cli",
+    "src/crates/xtask",
     "src/client",
     "src/server"
 ]
