@@ -66,6 +66,9 @@ pub mod websocket;
 /// Connection management
 pub mod connection;
 
+/// Rate limiting primitives (token bucket, burst control)
+pub mod rate_limit;
+
 // Re-export commonly used types
 pub use error::{Result, TransportError};
 pub use connection::{
