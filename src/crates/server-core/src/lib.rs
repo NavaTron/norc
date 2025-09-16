@@ -1,17 +1,19 @@
 //! NavaTron NORC Server Core
 //!
-//! Server-side implementation providing client session management, message routing,
-//! and federation capabilities for the NORC protocol.
+//! Server-side building blocks: session tracking, routing scaffolds, and future
+//! federation primitives for NORC. Persistence, full routing logic, and federation
+//! authentication are not yet implemented. Refer to `SECURITY.md` for current
+//! assurances and limitations.
 //!
-//! # Features
+//! # Features (Scaffold)
 //! 
 //! - **Session Management**: Handle multiple client connections with authentication
 //! - **Message Routing**: Route messages between clients, including cross-device delivery
 //! - **Federation**: Communicate with other NORC servers for distributed messaging
 //! - **Storage**: Persistent message and user data storage (optional)
-//! - **Security**: End-to-end encryption, message authentication, replay protection
+//! - **Security**: Planned end-to-end encryption + replay protection (not active yet)
 //!
-//! # Example
+//! # Example (Starting a Server)
 //!
 //! ```rust,no_run
 //! use navatron_server_core::{Server, ServerConfig};

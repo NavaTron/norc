@@ -1,8 +1,13 @@
 //! # NavaTron NORC Protocol
 //!
-//! This crate implements the NavaTron Open Real-time Communication (NORC) protocol
-//! specification. It provides the core message types, encoding/decoding, cryptographic
-//! operations, and version negotiation for secure federated communication.
+//! Rust reference (work‑in‑progress) for the NavaTron Open Real‑time Communication (NORC)
+//! protocol. Focus areas in this crate: message model, version negotiation, framing
+//! primitives, and cryptographic scaffolding. Security properties not yet implemented are
+//! explicitly documented and in some cases guarded behind `compile_error!` in ambiguous
+//! spec regions.
+//!
+//! See: `../../../../PROTOCOL_SPECIFICATION.md` & `SECURITY_MODEL.md` for design intent and
+//! `SECURITY.md` for current implementation posture / gaps.
 //!
 //! ## Protocol Layers
 //!
@@ -11,15 +16,21 @@
 //! - **NORC-F**: Server ↔ Server federation  
 //! - **NORC-T**: Trust establishment and management
 //!
-//! ## Features
+//! ## Current / Planned Features
 //!
-//! - End-to-end encryption with forward secrecy
-//! - Message integrity and replay protection
-//! - Version negotiation with Adjacent-Major Compatibility (AMC)
-//! - Cryptographic agility with secure defaults
-//! - Post-quantum hybrid cryptography (optional)
+//! Implemented (scaffold level):
+//! - Version negotiation (Adjacent‑Major Compatibility constraint)
+//! - Wire framing with size limits & hash‑chaining placeholder
+//! - Handshake state machine & capability negotiation placeholders
 //!
-//! ## Example
+//! Planned / Not Yet Implemented:
+//! - Forward secrecy & key schedule finalization
+//! - Replay protection (hash chain validator integration)
+//! - Authenticated encryption of payload frames
+//! - Post‑quantum hybrid key agreement (feature gated)
+//! - Metadata resistance (length padding, cover traffic)
+//!
+//! ## Example (Encoding a Message)
 //!
 //! ```rust
 //! use navatron_protocol::{Version, MessageType, NorcMessage, Message, WireFormat};

@@ -1,15 +1,16 @@
 //! NavaTron NORC Transport Layer
 //!
-//! This crate provides the transport layer for NORC protocol communication,
-//! including TLS, WebSocket connections, and connection management.
+//! Provides concrete network transports (TLS, WebSocket) and connection lifecycle
+//! management for the NORC protocol. Security‑critical pieces (TLS policy, ALPN, rate
+//! limiting) are evolving; consult `SECURITY.md` for current guarantees vs. roadmap.
 //!
-//! ## Features
+//! ## Features (Scaffold Status)
 //!
-//! - **TLS Support**: Production-ready TLS 1.3 with ALPN and optional mTLS
-//! - **WebSocket Transport**: Standards-compliant WebSocket transport for web integration
-//! - **Connection Management**: Advanced connection lifecycle management with health monitoring
-//! - **Error Handling**: Comprehensive error types with recovery and retry guidance
-//! - **Observability**: Structured logging and connection metrics
+//! - **TLS Support**: API surface present; certificate validation & mTLS policy enforcement TBD
+//! - **WebSocket Transport**: Structural stubs; masking/backpressure hooks planned
+//! - **Connection Management**: Basic handles + metadata types
+//! - **Rate Limiting**: Token bucket primitives (integration pending)
+//! - **Observability**: Tracing spans available; metrics exporter pending
 //!
 //! ## Examples
 //!

@@ -1,9 +1,11 @@
 //! NavaTron NORC Client Core
 //!
-//! Headless client library for the NORC protocol providing connection management,
-//! authentication, and message handling capabilities.
+//! Headless client library for the NORC protocol. Provides connection management,
+//! preliminary authentication scaffolding, and message handling placeholders.
+//! Actual cryptographic session establishment & replay protection are pending (see
+//! `SECURITY.md`).
 //!
-//! # Example
+//! # Example (Connecting)
 //!
 //! ```rust,no_run
 //! use navatron_client_core::{Client, ClientConfig};
