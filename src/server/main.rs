@@ -5,17 +5,24 @@
 #![warn(missing_docs)]
 
 use anyhow::Result;
-use navatron_cli::{load, NavaTronCommand};
+use navatron_cli::{load, NavaTronCommand, init_tracing};
+use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let (_cli, server_cfg, _client_cfg) = load().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    let (cli, server_cfg, _client_cfg) = load().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // Initialize tracing (text by default; set NAVATRON_LOG for fine-grained filters)
+    init_tracing(cli.verbose, false);
+
     if let Some(cfg) = server_cfg {
-        println!("NavaTron Server binding on {} (max_connections={})", cfg.listen, cfg.max_connections);
-        if cfg.metrics { println!("Metrics enabled on :9090/metrics (stub)"); }
-        // TODO: Initialize server-core with effective config
+        info!(listen=%cfg.listen, max_connections=%cfg.max_connections, metrics=cfg.metrics, "NavaTron server starting");
+        if cfg.metrics {
+            // TODO: spawn metrics endpoint (Prometheus) feature gated
+            warn!("metrics feature enabled but endpoint not yet implemented");
+        }
+        // TODO: Initialize server-core with effective config; attach shutdown signal handling later
     } else {
-        println!("Server command required");
+        warn!("server command required");
     }
     Ok(())
 }

@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::{PathBuf};
 use thiserror::Error;
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 /// CLI level error
 #[derive(Debug, Error)]
@@ -236,6 +237,42 @@ pub fn load() -> Result<(NavaTronCli, Option<EffectiveServerConfig>, Option<Effe
 		NavaTronCommand::Client(args) => (None, Some(build_client_config(args, file_value.clone(), cli.verbose)?)),
 	};
 	Ok((cli, server_cfg, client_cfg))
+}
+
+/// Initialize global tracing subscriber.
+///
+/// Verbosity mapping:
+/// 0 -> info (default)
+/// 1 -> debug
+/// 2+ -> trace
+/// Supports `RUST_LOG` / `NAVATRON_LOG` env override via `EnvFilter`.
+pub fn init_tracing(verbosity: u8, json: bool) {
+	// Determine base level from verbosity
+	let level = match verbosity {
+		0 => "info",
+		1 => "debug",
+		_ => "trace",
+	};
+
+	// Allow explicit env override (NAVATRON_LOG supersedes RUST_LOG)
+	let env_directive = std::env::var("NAVATRON_LOG").ok().or_else(|| std::env::var("RUST_LOG").ok());
+	let filter_directives = env_directive.unwrap_or_else(|| format!("{}", level));
+
+	let env_filter = EnvFilter::builder()
+		.with_default_directive(filter_directives.parse().unwrap_or_else(|_| level.parse().unwrap()))
+		.from_env_lossy();
+
+	let fmt_layer = if json {
+		fmt::layer().json().with_target(true).with_level(true).with_timer(fmt::time::UtcTime::rfc_3339())
+	} else {
+		fmt::layer().with_target(true).with_level(true)
+	};
+
+	tracing_subscriber::registry()
+		.with(env_filter)
+		.with(fmt_layer)
+		.init();
+	tracing::debug!(level=%level, "tracing initialized");
 }
 
 #[cfg(test)]
