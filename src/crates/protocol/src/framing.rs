@@ -14,6 +14,46 @@
 //!  4. Required action on hash chain discontinuity: soft error (warning + accept) vs hard protocol error (Spec NORC-C §Ordering Integrity Enforcement).
 //!
 //! Enable feature `strict-spec` to surface these as compile errors instead of silently accepting defaults.
+//!
+//! # Example: Preparing & Validating a Frame
+//! ```rust
+//! use navatron_protocol::framing::*;
+//! use navatron_protocol::messages::{NorcMessage, Message, MessageType, ConnectionRequestMessage};
+//! use navatron_protocol::version::Version;
+//! use navatron_protocol::types::Capability;
+//! use navatron_protocol::wire::WireFrame;
+//!
+//! // Build a sample message
+//! let msg = NorcMessage::new(
+//!     Version::V2_0,
+//!     MessageType::ConnectionRequest,
+//!     1,
+//!     [0u8;32],
+//!     Message::ConnectionRequest(ConnectionRequestMessage {
+//!         client_versions: vec![Version::V2_0],
+//!         preferred_version: Version::V2_0,
+//!         capabilities: vec![Capability::Messaging],
+//!         client_nonce: vec![7,7],
+//!         ephemeral_public_key: [0u8;32],
+//!         pq_public_key: None,
+//!     })
+//! );
+//! let mut frame = WireFrame::decode(&msg.encode().unwrap()).unwrap();
+//!
+//! // Apply outbound policy + masking (no-op here)
+//! let masker = NoOpMasker::default();
+//! let policy = AllowAllPolicy;
+//! prepare_outbound_frame(&mut frame, &masker, &policy).unwrap();
+//!
+//! // Re-encode and decode back to message
+//! let encoded = frame.encode().unwrap();
+//! let decoded = NorcMessage::decode(&encoded).unwrap();
+//! assert_eq!(decoded.sequence, 1);
+//! 
+//! // Hash chain validation (first message accepted; strict later)
+//! let mut validator = HashChainValidator::new(true);
+//! validator.validate_and_update(&decoded).unwrap();
+//! ```
 #![deny(unsafe_code)]
 #![allow(dead_code)]
 

@@ -16,6 +16,53 @@
 //! 4. Masking Algorithm Parameters (Spec NORC-C §Framing): mask key derivation salt not defined.
 //!
 //! Enable `strict-spec` feature to surface these blockers as compile errors.
+//!
+//! # Example: Client Handshake Flow (Simplified)
+//! ```rust
+//! use navatron_protocol::handshake::*;
+//! use navatron_protocol::messages::{ConnectionRequestMessage, ConnectionAcceptedMessage, Capability};
+//! use navatron_protocol::version::Version;
+//! use std::time::Duration;
+//!
+//! // Configure handshake (client side)
+//! let cfg = HandshakeConfig { 
+//!     supported_versions: vec![Version::V2_0],
+//!     capability_policy: AllowAllCapabilities,
+//!     max_duration: Duration::from_secs(5)
+//! };
+//! let mut hs = Handshake::new(HandshakeRole::Client, cfg);
+//!
+//! // Build connection request (ephemeral keys omitted / placeholder)
+//! let req = ConnectionRequestMessage {
+//!     client_versions: vec![Version::V2_0],
+//!     preferred_version: Version::V2_0,
+//!     capabilities: vec![Capability::Messaging],
+//!     client_nonce: vec![1,2,3],
+//!     ephemeral_public_key: [0u8;32],
+//!     pq_public_key: None,
+//! };
+//! hs.initiate_client(&req).unwrap();
+//!
+//! // Simulate server accept
+//! let accept = ConnectionAcceptedMessage {
+//!     negotiated_version: Version::V2_0,
+//!     server_capabilities: vec![Capability::Messaging],
+//!     compatibility_mode: false,
+//!     server_nonce: vec![9,9,9],
+//!     ephemeral_public_key: [0u8;32],
+//!     pq_response: None,
+//!     session_id: uuid::Uuid::new_v4(),
+//! };
+//! hs.on_server_accept(&accept).unwrap();
+//!
+//! // Capability intersection (placeholder logic)
+//! hs.finalize_capabilities(&[Capability::Messaging], &[Capability::Messaging]).unwrap();
+//!
+//! // Derive keys & complete (placeholders – real KDF TBD)
+//! hs.derive_keys().unwrap();
+//! hs.complete().unwrap();
+//! assert!(matches!(hs.state(), HandshakeState::Complete));
+//! ```
 #![allow(dead_code)]
 
 #[cfg(feature = "strict-spec")]
