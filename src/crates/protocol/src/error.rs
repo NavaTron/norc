@@ -6,6 +6,21 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, NorcError>;
 
 /// Comprehensive error types for NORC protocol operations
+///
+/// Mapping guidelines (NORC internal):
+///  * 1xxx – Version / codec / crypto negotiation
+///  * 2xxx – Authentication & authorization
+///  * 3xxx – Validation / state machine violations
+///  * 4xxx – Transport / IO
+///  * 5xxx – Federation / trust
+///  * 6xxx – Throttling / rate limiting
+///  * 7xxx – Replay / ordering integrity
+///  * 8xxx – Configuration
+///  * 9xxx – Internal / unexpected
+///
+/// NOTE: If new categories are introduced without corresponding NORC spec
+/// code range allocation, add them with a temporary 98xx number *and* a
+/// compile-time guard (future TODO) once spec clarifications are required.
 #[derive(Error, Debug, Clone)]
 pub enum NorcError {
     /// Protocol version mismatch or invalid version
@@ -205,6 +220,26 @@ impl NorcError {
             Self::Ordering { .. } => 7001,
             Self::Config { .. } => 8000,
             Self::Internal { .. } => 9000,
+        }
+    }
+
+    /// Return a short stable string category for metrics/log partitioning
+    pub fn category(&self) -> &'static str {
+        match self {
+            Self::Version { .. } => "version",
+            Self::Codec { .. } => "codec",
+            Self::Crypto { .. } => "crypto",
+            Self::Auth { .. } => "auth",
+            Self::Validation { .. } => "validation",
+            Self::InvalidState { .. } => "state",
+            Self::Transport { .. } => "transport",
+            Self::Federation { .. } => "federation",
+            Self::Trust { .. } => "trust",
+            Self::RateLimit { .. } => "rate_limit",
+            Self::Replay { .. } => "replay",
+            Self::Ordering { .. } => "ordering",
+            Self::Config { .. } => "config",
+            Self::Internal { .. } => "internal",
         }
     }
 

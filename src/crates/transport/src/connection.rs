@@ -242,13 +242,13 @@ impl ConnectionHandle {
         self.task_handle.abort();
         
         // Wait for task completion (with timeout)
-        let _ = match tokio::time::timeout(Duration::from_secs(5), self.task_handle).await {
+        match tokio::time::timeout(Duration::from_secs(5), self.task_handle).await {
             Ok(result) => result.map_err(|e| TransportError::connection(format!("Task join error: {}", e)))?,
             Err(_) => {
                 warn!("Connection close timed out");
                 return Err(TransportError::Timeout { duration_ms: 5000 });
             }
-        };
+        }
 
         Ok(())
     }
@@ -363,11 +363,11 @@ impl ConnectionManager {
 
     /// Get connection metadata
     pub async fn get_connection(&self, id: ConnectionId) -> Option<ConnectionMetadata> {
-        if let Some(metadata_arc) = self.connections.read().await.get(&id) {
-            Some(metadata_arc.read().await.clone())
-        } else {
-            None
-        }
+        // Simplified: read lock, clone Arc, then read inner lock once.
+        let map_guard = self.connections.read().await;
+        let arc_meta = map_guard.get(&id)?.clone();
+        let meta = arc_meta.read().await.clone();
+        Some(meta)
     }
 
     /// Get connection count

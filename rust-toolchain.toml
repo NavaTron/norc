@@ -1,0 +1,5 @@
+[toolchain]
+channel = "stable"
+components = ["clippy", "rustfmt"]
+# MSRV policy: code must compile on this pinned stable release; bump intentionally with changelog note.
+profile = "minimal"

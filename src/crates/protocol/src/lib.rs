@@ -66,6 +66,8 @@
 
 pub mod crypto;
 pub mod error;
+pub mod handshake;
+pub mod framing;
 pub mod messages;
 pub mod types;
 pub mod version;
@@ -73,6 +75,7 @@ pub mod wire;
 
 // Re-export main types for convenience
 pub use error::{NorcError, Result};
+pub use handshake::*;
 pub use messages::{Message, MessageType, NorcMessage};
 pub use types::*;
 pub use version::{Version, VersionNegotiation};

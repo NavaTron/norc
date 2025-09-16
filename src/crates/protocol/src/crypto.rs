@@ -397,7 +397,11 @@ impl NorcCrypto {
             nonce_material.extend_from_slice(device_id_bytes);
             nonce_material.extend_from_slice(message_id);
             let nonce_hash = Self::hash(&nonce_material);
-            let nonce = nonce_hash[..12].try_into().unwrap();
+            let nonce: [u8;12] = nonce_hash
+                .get(..12)
+                .ok_or_else(|| NorcError::crypto("Nonce derivation failed: insufficient hash bytes"))?
+                .try_into()
+                .map_err(|_| NorcError::crypto("Nonce slice conversion failed"))?;
 
             let aad = Self::build_aad(0, 0, 0, 0, *device_id, &nonce_hash)?;
             let wrapped = Self::encrypt(&wrap_key, &nonce, &aad, content_key.expose_secret())?;

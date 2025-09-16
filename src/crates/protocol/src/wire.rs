@@ -272,6 +272,9 @@ impl WireFormat for NorcMessage {
             payload,
         };
 
+        // TODO: integrate HashChainValidator (framing.rs) here once higher layer supplies context.
+        // This requires external state; keeping pure decode side-effect free for now.
+
         // Validate the decoded message
         message.validate()?;
 

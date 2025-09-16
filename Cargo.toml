@@ -99,24 +99,29 @@ criterion = { version = "0.5", features = ["html_reports"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
-missing_docs = "warn"
-rust_2018_idioms = "warn"
-trivial_casts = "warn"
-trivial_numeric_casts = "warn"
-unused_extern_crates = "warn"
-unused_import_braces = "warn"
-unused_qualifications = "warn"
+missing_docs = "warn" # keep as warn initially; will escalate after docs pass
+rust_2018_idioms = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+unused_extern_crates = "deny"
+unused_import_braces = "deny"
+unused_qualifications = "deny"
+unused_crate_dependencies = "deny"
+dead_code = "warn" # escalate later once build stabilizes
 
 [workspace.lints.clippy]
-all = "warn"
-pedantic = "warn"
-nursery = "warn"
-cargo = "warn"
-# Allow some pedantic lints that are too strict for this codebase
+all = "deny"
+pedantic = "deny"
+nursery = "deny"
+cargo = "deny"
+# Selected allowances for practicality
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
-missing_errors_doc = "allow"
+missing_errors_doc = "allow" # will document errors progressively
 missing_panics_doc = "allow"
+too_many_lines = "allow"
+similar_names = "allow"
+large_enum_variant = "allow"
 
 [profile.release]
 opt-level = 3
