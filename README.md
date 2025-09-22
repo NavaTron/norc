@@ -12,14 +12,19 @@ Current solutions force you to choose between security and collaboration. **NORC
 
 NORC is a secure real-time communication protocol built for organizations that need both ironclad security and practical federation. Think of it as the next evolution beyond Signal (secure but centralized) and Matrix (federated but complex)—combining the best of both worlds while preparing for the post-quantum future.
 
-**Key Innovation**: NORC uses "graduated trust levels" instead of the traditional all-or-nothing approach to federation. You can communicate securely with:
+**Key Innovation**: NORC uses a five-state graduated trust hierarchy instead of the traditional all-or-nothing approach to federation:
 
-* **Basic partners** (standard business relationships)  
-* **Verified partners** (higher assurance requirements)  
-* **Classified partners** (government/defense contractors)  
-* **NATO-level partners** (international security cooperation)
+| Level | Purpose | Cryptographic Requirement (summary) |
+|-------|---------|--------------------------------------|
+| Untrusted | No relationship – communication blocked | N/A (connection refused) |
+| Basic | Standard business collaboration | Classical E2E (Ed25519 + X25519 + ChaCha20-Poly1305) |
+| Verified | Higher assurance (validated org identity) | Mandatory hybrid (X25519 + Kyber768) |
+| Classified | Security-cleared, regulated environments | Hybrid + hardened deployment (HSM recommended) |
+| NATO | International defense/security cooperation | Hybrid + national/FIPS-aligned algorithms + PQ signature roadmap |
 
-Each level has different security requirements and capabilities, giving you granular control over who you trust and how much.
+Hybrid post-quantum key agreement (classical + Kyber768) is mandatory for Verified and above; Basic can opportunistically upgrade if both sides advertise support. Any downgrade attempt when hybrid is mutually supported is cryptographically detected and aborted.
+
+> Footnote: References to "256-bit" (e.g., in planning materials or comparative charts) denote a long-term symmetric security retention objective derived from combining classical + post-quantum key establishment (hybrid X25519 + Kyber768) and do not imply that all asymmetric primitives presently provide 256 bits of classical security. Current asymmetric primitives (Ed25519, X25519) remain ~128-bit classical strength while achieving a post-quantum hedge through hybrid KEM. PQ signature deployment follows the published roadmap; until standardized and mandated, signature operations remain classical-only.
 
 ### Three-Layer Architecture
 
@@ -40,6 +45,32 @@ Each level has different security requirements and capabilities, giving you gran
 **NORC-T** (Trust): The governance layer - manages who can talk to whom and at what security level
 
 ---
+## Operational Guarantees (Current Targets)
+
+| Property | Target | Notes |
+|----------|--------|-------|
+| Interactive Latency | ≤500 ms (95th pct), ≤100 ms intra-org typical | Under normal load conditions |
+| Version Compatibility | Adjacent major only (N ↔ N±1) | Deterministic reject outside window |
+| Revocation Propagation | ≤300 s federation-wide | Push + ≤60 s polling fallback |
+| Availability (Ref Arch) | ≥99.9% with redundancy | Not a protocol guarantee—deployment guidance |
+| Max Interactive Message | 4 MiB | Larger via chunked file transfer |
+| Padding | Bucketed (1KB–256KB) | Adaptive privacy vs overhead |
+| Hybrid PQ Adoption | Mandatory ≥ Verified | Basic opportunistic upgrade |
+| Forward Secrecy | Ephemeral per-session + wrapped per-message keys | No plaintext on servers |
+
+## Formal Assurance & Security Engineering
+
+* Handshake & key schedule modelled (Tamarin/ProVerif – in progress) for secrecy, authentication, downgrade resistance.
+* Cryptographically chained audit logs (BLAKE3 hash chain) – metadata only, no plaintext content.
+* Replay / KCI / downgrade resistance enforced via transcript binding, sequence windows, hybrid negotiation.
+* Supply chain integrity (reproducible builds, signed artifacts, SBOM, provenance attestations) – see Requirements §18.3.
+* PQ Signature Roadmap: Evaluation 2026 → experimental dual-sign → staged mandate (Classified/NATO earliest 2027).
+
+## Algorithm Agility
+
+Baseline: Ed25519 / X25519 (+ Kyber768 for Verified+) / ChaCha20-Poly1305 / BLAKE3 / HKDF (`norc:` labels).
+
+Negotiable alternatives: AES-256-GCM (FIPS / hardware), SHA-256 (FIPS), future PQ signatures (Dilithium/Falcon), additional PQ KEM variants. Selection always prefers strongest mutually supported set; downgrade ambiguity aborts the handshake.
 
 ## Why Does NORC Exist?
 
@@ -208,50 +239,21 @@ NORC uses modern, battle-tested cryptographic primitives:
 
 ---
 
-## Getting Started
-
-Ready to explore NORC? Here's your roadmap:
-
-### For Security Architects
-
-1. **Review the Specifications**: Start with [Protocol Specification](PROTOCOL_SPECIFICATION.md)
-2. **Understand the Threats**: Read our [Security & Threat Model](SECURITY_MODEL.md)
-3. **Evaluate for Your Use Case**: Check if NORC fits your organization's needs
-4. **Join the Discussion**: Engage with our community on cryptographic design
-
-### For Developers
-
-1. **Read the Implementation Guide**: Follow [Implementation Guide](IMPLEMENTATION_GUIDE.md)
-2. **Study the Examples**: Work through [Test Vectors](TEST_VECTORS.md)
-3. **Choose Your Stack**: NORC works with any language (reference implementation in Erlang/OTP)
-4. **Build a Prototype**: Start with basic device registration and messaging
-
-### For Organizations
-
-1. **Assess Your Needs**: Do you need secure cross-organization collaboration?
-2. **Evaluate Alternatives**: Compare NORC to your current solutions
-3. **Plan Migration**: Understand the deployment requirements
-4. **Contact Us**: Discuss early adopter programs and support
-
-### Quick Start
-
-```bash
-# Clone the repository
-git clone https://github.com/NavaTron/norc.git
-cd norc
-
-# Read the specifications
-open PROTOCOL_SPECIFICATION.md
-
-# Follow the implementation guide
-open IMPLEMENTATION_GUIDE.md
-```
-
----
-
 ## What's Next?
 
-NORC is currently in active development with implementations in Erlang/OTP (reference) and Rust (performance-focused). The protocol specifications are open source under Apache-2.0 license.
+NORC is currently in active development with implementations in Rust (performance-focused). The protocol specifications are open source under Apache-2.0 license.
+
+### Post-Quantum Signature Roadmap (Preview)
+
+| Phase | Target Window | Goal |
+|-------|---------------|------|
+| Evaluation | Q1–Q2 2026 | Benchmark Dilithium/Falcon/SPHINCS+, side-channel review |
+| Experimental Extension | Q3 2026 | Dual-sign (Ed25519 + PQ) extension & test vectors |
+| Hybrid Adoption | Q4 2026 | Optional dual-sign for Verified+ production pilots |
+| Mandate Proposal | Q1 2027 | Governance decision for Classified/NATO requirement |
+| Potential Enforcement | Q4 2027+ | PQ signatures required at highest trust levels |
+
+Timeline assumes standardization stability and positive interoperability/security outcomes.
 
 ### For Security Researchers
 
@@ -264,14 +266,6 @@ NORC is currently in active development with implementations in Erlang/OTP (refe
 * Evaluate NORC for future secure collaboration requirements
 * Participate in early adopter programs and testing
 * Contribute to compliance and governance requirements
-
-### Development Roadmap
-
-| Version | Focus | Timeline |
-|---------|-------|----------|
-| v1.0 | Core protocol stabilization, formal security proofs | Q4 2025 |
-| v1.1 | Performance optimizations, expanded trust levels | Q2 2026 |
-| v1.2 | Group messaging, advanced media support | Q4 2026 |
 
 ---
 
@@ -299,4 +293,4 @@ The future of organizational communication will be determined by the protocols w
 
 ---
 
-**NORC: Secure Federation Without Compromise**
+**NORC: Secure federatated messaging without compromise**

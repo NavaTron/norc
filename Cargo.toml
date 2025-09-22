@@ -7,140 +7,17 @@ members = [
     "src/crates/server-core",
     "src/crates/tui",
     "src/crates/cli",
-    "src/crates/xtask",
     "src/client",
     "src/server"
 ]
 
 [workspace.package]
 version = "0.1.0"
-authors = ["NavaTron B.V."]
+authors = ["NavaTron Holding B.V."]
 license = "Apache-2.0"
 edition = "2024"
-rust-version = "1.89.0"
+rust-version = "1.90.0"
 repository = "https://github.com/navatron/norc"
 homepage = "https://navatron.com"
 description = "NavaTron Open Real-time Communication Protocol"
 keywords = ["chat", "protocol", "encryption", "federation"]
-categories = ["network-programming", "cryptography", "command-line-utilities"]
-
-[workspace.dependencies]
-# Async runtime
-tokio = { version = "1.35", features = ["full"] }
-tokio-util = { version = "0.7", features = ["codec", "net"] }
-tokio-stream = "0.1"
-tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
-futures = "0.3"
-async-trait = "0.1"
-bytes = "1.0"
-
-# Cryptography
-ring = "0.17"
-ed25519-dalek = { version = "2.0", features = ["rand_core"] }
-x25519-dalek = "2.0"
-chacha20poly1305 = "0.10"
-blake3 = "1.5"
-hkdf = "0.12"
-rand = "0.8"
-rand_core = { version = "0.6", features = ["std"] }
-zeroize = { version = "1.7", features = ["derive"] }
-
-# TLS and networking  
-rustls = { version = "0.22", features = ["ring"] }
-rustls-pemfile = "2.0"
-rustls-native-certs = "0.7"
-webpki-roots = "0.26"
-native-tls = "0.2"
-tokio-rustls = "0.25"
-url = "2.4"
-
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_with = "3.0"
-uuid = { version = "1.6", features = ["v4", "serde"] }
-base64 = "0.21"
-bincode = "1.3"
-
-# Database and persistence
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "uuid", "chrono", "migrate"] }
-
-# Terminal UI
-ratatui = { version = "0.25", features = ["all-widgets"] }
-crossterm = { version = "0.27", features = ["serde"] }
-tui-textarea = "0.4"
-
-# CLI
-clap = { version = "4.4", features = ["derive", "env", "string"] }
-
-# Error handling
-thiserror = "1.0"
-anyhow = "1.0"
-
-# Observability
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-tracing-futures = "0.2"
-tracing-appender = "0.2"
-
-# Optional metrics (feature-gated)
-prometheus = "0.13"
-axum = "0.7"
-
-# Time handling
-chrono = { version = "0.4", features = ["serde"] }
-
-# Configuration
-config = "0.13"
-directories = "5.0"
-
-# Development and testing
-proptest = "1.4"
-criterion = { version = "0.5", features = ["html_reports"] }
-
-[workspace.lints.rust]
-unsafe_code = "forbid"
-missing_docs = "warn" # keep as warn initially; will escalate after docs pass
-rust_2018_idioms = "deny"
-trivial_casts = "deny"
-trivial_numeric_casts = "deny"
-unused_extern_crates = "deny"
-unused_import_braces = "deny"
-unused_qualifications = "deny"
-unused_crate_dependencies = "deny"
-dead_code = "warn" # escalate later once build stabilizes
-
-[workspace.lints.clippy]
-all = "deny"
-pedantic = "deny"
-nursery = "deny"
-cargo = "deny"
-# Selected allowances for practicality
-module_name_repetitions = "allow"
-must_use_candidate = "allow"
-missing_errors_doc = "allow" # will document errors progressively
-missing_panics_doc = "allow"
-too_many_lines = "allow"
-similar_names = "allow"
-large_enum_variant = "allow"
-
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
-
-[profile.dev]
-opt-level = 0
-debug = true
-split-debuginfo = "unpacked"
-
-[profile.test]
-opt-level = 1
-debug = true
-
-[profile.bench]
-opt-level = 3
-debug = false
-lto = true

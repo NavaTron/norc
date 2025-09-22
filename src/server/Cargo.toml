@@ -1,37 +1,14 @@
 [package]
-name = "navatron-server"
+name = "norc-server"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NavaTron NORC Server"
+description = "NORC Server"
 keywords = ["server", "chat", "federation"]
-categories = ["command-line-utilities"]
 
 [[bin]]
-name = "navatron-server"
+name = "norc-server"
 path = "main.rs"
-
-[dependencies]
-# Internal crates
-navatron-protocol = { path = "../crates/protocol" }
-navatron-transport = { path = "../crates/transport" }
-navatron-server-core = { path = "../crates/server-core" }
-navatron-tui = { path = "../crates/tui" }
-navatron-cli = { path = "../crates/cli" }
-
-# Async runtime
-tokio = { workspace = true }
-
-# Error handling
-anyhow = { workspace = true }
-
-# Observability
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-
-[features]
-default = []
-sqlite = ["navatron-server-core/sqlite"]

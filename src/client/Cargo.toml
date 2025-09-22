@@ -1,36 +1,13 @@
 [package]
-name = "navatron-client"
+name = "norc-client"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NavaTron NORC Client - Terminal chat client"
-keywords = ["client", "chat", "terminal"]
-categories = ["command-line-utilities"]
+description = "NORC Client - Terminal chat client"
 
 [[bin]]
-name = "navatron-client"
+name = "norc-client"
 path = "main.rs"
-
-[dependencies]
-# Internal crates
-navatron-protocol = { path = "../../crates/protocol" }
-navatron-transport = { path = "../../crates/transport" }
-navatron-client-core = { path = "../../crates/client-core" }
-navatron-tui = { path = "../../crates/tui" }
-navatron-cli = { path = "../../crates/cli" }
-
-# Async runtime
-tokio = { workspace = true }
-
-# Error handling
-anyhow = { workspace = true }
-
-# Observability
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-
-[features]
-default = []

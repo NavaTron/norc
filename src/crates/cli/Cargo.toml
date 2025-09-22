@@ -1,33 +1,10 @@
 [package]
-name = "navatron-cli"
+name = "norc-cli"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NavaTron NORC CLI utilities - Command line interface helpers"
+description = "NORC CLI utilities - Command line interface helpers"
 keywords = ["cli", "clap", "config"]
-categories = ["command-line-interface"]
-
-[dependencies]
-# CLI
-clap = { workspace = true }
-
-# Configuration
-config = { workspace = true }
-directories = { workspace = true }
-
-# Serialization
-serde = { workspace = true }
-
-# Error handling
-thiserror = { workspace = true }
-anyhow = { workspace = true }
-
-# Observability
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-
-[features]
-default = []

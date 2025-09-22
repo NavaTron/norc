@@ -1,42 +1,10 @@
 [package]
-name = "navatron-transport"
+name = "norc-transport"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NavaTron NORC Transport layer - TLS, WebSocket, and connection management"
+description = "NORC Transport layer - TLS, WebSocket, and connection management"
 keywords = ["transport", "tls", "websocket", "networking"]
-categories = ["network-programming"]
-
-[dependencies]
-# Protocol layer
-navatron-protocol = { path = "../protocol" }
-
-# Async runtime
-tokio = { workspace = true }
-tokio-util = { workspace = true }
-tokio-stream = { workspace = true }
-tokio-tungstenite = { workspace = true }
-futures = { workspace = true }
-
-# TLS and networking
-rustls = { workspace = true }
-rustls-pemfile = { workspace = true }
-rustls-native-certs = { workspace = true }
-webpki-roots = { workspace = true }
-tokio-rustls = { workspace = true }
-url = { workspace = true }
-
-# Serialization and utilities
-uuid = { workspace = true }
-thiserror = { workspace = true }
-anyhow = { workspace = true }
-
-# Observability
-tracing = { workspace = true }
-
-[features]
-default = []
-mtls = []

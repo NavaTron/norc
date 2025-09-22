@@ -1,39 +1,10 @@
 [package]
-name = "navatron-server-core"
+name = "norc-server-core"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NavaTron NORC Server Core - Headless server library"
+description = "NORC Server Core - Headless server library"
 keywords = ["server", "norc", "federation"]
-categories = ["network-programming"]
-
-[dependencies]
-# Protocol and transport
-navatron-protocol = { path = "../protocol" }
-navatron-transport = { path = "../transport" }
-
-# Async runtime
-tokio = { workspace = true }
-futures = { workspace = true }
-async-trait = { workspace = true }
-
-# Database
-sqlx = { workspace = true, optional = true }
-
-# Error handling
-thiserror = { workspace = true }
-anyhow = { workspace = true }
-
-# Observability
-tracing = { workspace = true }
-
-# Time and UUID
-uuid = { workspace = true }
-chrono = { workspace = true }
-
-[features]
-default = []
-sqlite = ["sqlx"]
