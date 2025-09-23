@@ -8,37 +8,3 @@ rust-version.workspace = true
 repository.workspace = true
 description = "NORC Protocol implementation - message types, codecs, and versioning"
 keywords = ["norc", "protocol", "messaging", "encryption"]
-
-[dependencies]
-# Serialization
-serde = { workspace = true }
-serde_json = { workspace = true }
-uuid = { workspace = true, features = ["v4"] }
-bytes = { workspace = true }
-
-# Cryptography
-ring = { workspace = true }
-ed25519-dalek = { workspace = true }
-x25519-dalek = { workspace = true }
-
-# Error handling
-thiserror = { workspace = true }
-anyhow = { workspace = true }
-
-# Time handling
-time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
-
-# Binary encoding
-postcard = { version = "1.0", features = ["use-std"] }
-
-[dev-dependencies]
-tokio-test = { workspace = true }
-proptest = { workspace = true }
-criterion = { workspace = true }
-
-[[bench]]
-name = "message_serialization"
-harness = false
-
-[lints]
-workspace = true
