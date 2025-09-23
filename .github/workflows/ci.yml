@@ -80,7 +80,13 @@ jobs:
         run: cargo test --all-features
         
       - name: Run integration tests
-        run: cargo test --test '*' --all-features
+        run: |
+          # Only run integration tests if they exist
+          if ls tests/*.rs 1> /dev/null 2>&1; then
+            cargo test --test '*' --all-features
+          else
+            echo "No integration tests found, skipping"
+          fi
         
       - name: Run doc tests
         run: cargo test --doc --all-features
