@@ -1,1 +1,1 @@
-//! TLS connection handling for NORC protocol
+//! TLS support for transport connections//! TLS support for transport connections//! TLS support for transport connections

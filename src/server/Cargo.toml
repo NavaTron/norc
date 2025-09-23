@@ -12,3 +12,25 @@ keywords = ["server", "chat", "federation"]
 [[bin]]
 name = "norc-server"
 path = "main.rs"
+
+[dependencies]
+# Workspace crates
+norc-server-core = { path = "../crates/server-core" }
+norc-config = { path = "../crates/config" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# CLI and configuration
+clap = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Logging and observability
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+
+# System integration
+libc = "0.2"

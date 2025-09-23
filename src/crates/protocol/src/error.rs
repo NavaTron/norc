@@ -1,1 +1,2 @@
-//! Error types for the NORC protocol
+//! Protocol Error Types
+

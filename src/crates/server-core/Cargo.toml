@@ -8,3 +8,33 @@ rust-version.workspace = true
 repository.workspace = true
 description = "NORC Server Core - Headless server library"
 keywords = ["server", "norc", "federation"]
+
+[dependencies]
+# Workspace crates
+norc-protocol = { path = "../protocol" }
+norc-transport = { path = "../transport" }
+norc-config = { path = "../config" }
+
+# Async runtime
+tokio = { workspace = true }
+futures = { workspace = true }
+
+# Data structures and serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+bytes = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging and observability
+tracing = { workspace = true }
+
+# Collections and utilities
+pin-project-lite = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+tempfile = { workspace = true }

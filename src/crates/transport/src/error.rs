@@ -1,1 +1,1 @@
-//! Transport layer errors
+//! Transport layer error types

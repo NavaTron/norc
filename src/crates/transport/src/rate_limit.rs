@@ -1,1 +1,1 @@
-//! Rate limiting primitives for the NORC transport layer
+//! Rate limiting for transport connections

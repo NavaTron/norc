@@ -1,0 +1,26 @@
+# Clippy configuration for NORC project
+# This configuration enforces production-ready code quality standards
+
+# Allow certain complex patterns that are common in networking/cryptographic code
+cognitive-complexity-threshold = 30
+type-complexity-threshold = 100
+
+# Be strict about potential issues
+avoid-breaking-exported-api = true
+enum-variant-names-threshold = 3
+
+# Don't warn about common patterns in our domain
+avoid = [
+    "clippy::module_name_repetitions",  # Common in protocol implementations
+    "clippy::similar_names",            # Cryptographic variables often have similar names
+]
+
+# Additional strict lints for production code
+disallowed-methods = [
+    "std::env::set_var",                # Use structured configuration instead
+    "std::process::exit",               # Use proper error handling
+    "std::panic::catch_unwind",         # Explicit error handling preferred
+]
+
+# Enforce documentation standards
+missing-docs-in-crate-items = true

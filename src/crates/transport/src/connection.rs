@@ -1,1 +1,1 @@
-//! Connection management for NORC protocol
+//! Connection management for NORC transport layer

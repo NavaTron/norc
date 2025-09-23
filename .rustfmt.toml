@@ -1,0 +1,45 @@
+# Rustfmt configuration for NORC project
+# Ensures consistent code formatting across the project
+
+# Edition and formatting settings
+edition = "2024"
+use_field_init_shorthand = true
+use_try_shorthand = true
+format_code_in_doc_comments = true
+normalize_comments = true
+normalize_doc_attributes = true
+
+# Import organization
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+
+# Function and control flow formatting
+fn_args_layout = "Tall"
+control_brace_style = "AlwaysSameLine"
+brace_style = "SameLineWhere"
+
+# String and array formatting
+format_strings = true
+format_macro_matchers = true
+max_width = 100
+comment_width = 80
+
+# Struct and enum formatting
+struct_field_align_threshold = 20
+array_width = 60
+chain_width = 60
+
+# Documentation and attributes
+wrap_comments = true
+doc_comment_code_block_width = 80
+
+# Trailing elements
+trailing_comma = "Vertical"
+trailing_semicolon = true
+
+# Miscellaneous
+remove_nested_parens = true
+space_after_colon = true
+space_before_colon = false
+spaces_around_ranges = false

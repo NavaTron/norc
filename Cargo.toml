@@ -7,6 +7,7 @@ members = [
     "src/crates/server-core",
     "src/crates/tui",
     "src/crates/cli",
+    "src/crates/config",
     "src/client",
     "src/server"
 ]
@@ -21,3 +22,74 @@ repository = "https://github.com/navatron/norc"
 homepage = "https://navatron.com"
 description = "NavaTron Open Real-time Communication Protocol"
 keywords = ["chat", "protocol", "encryption", "federation"]
+
+# Workspace-wide metadata
+[workspace.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+# Common lint configuration
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unused_must_use = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+cargo = "warn"
+# Allow certain patterns common in networking/crypto code
+module_name_repetitions = "allow"
+similar_names = "allow"
+
+# Shared dependencies for workspace
+[workspace.dependencies]
+# Async runtime and utilities
+tokio = { version = "1.0", features = ["full"] }
+tokio-test = "0.4"
+
+# Serialization and data handling
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Logging and observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tracing-appender = "0.2"
+
+# Network and security
+rustls = "0.21"
+rustls-pemfile = "2.0"
+tokio-rustls = "0.24"
+webpki-roots = "0.25"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# CLI and configuration
+clap = { version = "4.0", features = ["derive", "env"] }
+
+# Cryptography
+ring = "0.17"
+ed25519-dalek = "2.0"
+x25519-dalek = "2.0"
+
+# Testing and development
+proptest = "1.0"
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.0"
+
+# Utility crates
+bytes = "1.0"
+futures = "0.3"
+pin-project-lite = "0.2"
+
+# Time handling
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
+
+# Binary encoding
+postcard = { version = "1.0", features = ["use-std"] }

@@ -23,3 +23,4 @@ target
 
 # Ignore local files macos
 **/.DS_Store
+*.lock

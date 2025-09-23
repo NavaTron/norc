@@ -1,3 +1,3 @@
-//! NORC Server Core
-
-#![deny(unsafe_code)]
+//! NORC Server Core Library
+//!
+//! This crate provides the core server implementation for the NORC protocol.

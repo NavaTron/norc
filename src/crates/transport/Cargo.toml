@@ -8,3 +8,42 @@ rust-version.workspace = true
 repository.workspace = true
 description = "NORC Transport layer - TLS, WebSocket, and connection management"
 keywords = ["transport", "tls", "websocket", "networking"]
+
+[dependencies]
+# Async runtime and utilities
+tokio = { workspace = true, features = ["net", "io-util", "time", "sync", "rt"] }
+futures = { workspace = true }
+pin-project-lite = { workspace = true }
+bytes = { workspace = true }
+
+# TLS and security
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+tokio-rustls = { workspace = true }
+webpki-roots = { workspace = true }
+
+# Protocol support
+norc-protocol = { path = "../protocol" }
+
+# Error handling and utilities
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+tempfile = { workspace = true }
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "connection_throughput"
+harness = false
+
+[lints]
+workspace = true
