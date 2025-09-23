@@ -22,4 +22,4 @@ target
 # End RustRover
 
 # Ignore local files macos
-.DS_Store
+**/.DS_Store
