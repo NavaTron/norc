@@ -1,28 +1,25 @@
-//! NORC Protocol Implementation
+//! NORC Protocol Core
 //!
-//! This crate implements the NavaTron Open Real-time Communication (NORC) protocol.
-//! It provides core message types, cryptographic primitives, wire format definitions,
-//! and protocol state machines required for implementing NORC-compliant clients and servers.
-//!
-//! # Protocol Overview
-//!
-//! The NORC protocol is designed around three core layers:
-//! - **NORC-C**: Client communication layer
-//! - **NORC-F**: Federation layer for server-to-server communication  
-//! - **NORC-T**: Trust management layer
-//!
-//! # Example Usage
-//!
-//! ```rust
-//! use norc_protocol::{Message, MessageType, ProtocolVersion};
-//!
-//! // Create a protocol message
-//! let msg = Message::new(
-//!     MessageType::TextMessage,
-//!     b"Hello, NORC!".to_vec(),
-//! );
-//!
-//! // Serialize for transmission
-//! let serialized = msg.to_wire_format()?;
-//! # Ok::<(), Box<dyn std::error::Error>>(())
-//! ```
+//! This crate contains the core protocol types, message definitions, and cryptographic
+//! primitives for the NavaTron Open Real-time Communication (NORC) protocol.
+
+pub mod error;
+pub mod message;
+pub mod identity;
+pub mod crypto;
+
+pub use error::{ProtocolError, Result};
+pub use message::{Message, MessageType, MessageHeader, MessagePayload};
+pub use identity::{Identity, IdentityKeyPair, PublicKey};
+
+/// Protocol version constants
+pub const PROTOCOL_VERSION_MAJOR: u16 = 1;
+pub const PROTOCOL_VERSION_MINOR: u16 = 0;
+pub const PROTOCOL_VERSION_PATCH: u16 = 0;
+
+/// Maximum message size in bytes
+pub const MAX_MESSAGE_SIZE: usize = 1024 * 1024; // 1MB
+
+/// Network port constants
+pub const DEFAULT_SERVER_PORT: u16 = 4242;
+pub const DEFAULT_FEDERATION_PORT: u16 = 4243;

@@ -6,5 +6,35 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NORC Transport layer - TLS, WebSocket, and connection management"
-keywords = ["transport", "tls", "websocket", "networking"]
+description = "NORC Transport - Network transport layer and connection management"
+keywords = ["transport", "network", "tls"]
+
+[lib]
+name = "norc_transport"
+crate-type = ["lib"]
+
+[dependencies]
+# Workspace crates
+norc-protocol = { path = "../protocol" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Network and TLS
+rustls = { workspace = true }
+tokio-rustls = { workspace = true }
+webpki-roots = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Utilities
+bytes = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }

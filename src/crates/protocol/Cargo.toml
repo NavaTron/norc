@@ -6,5 +6,36 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NORC Protocol implementation - message types, codecs, and versioning"
-keywords = ["norc", "protocol", "messaging", "encryption"]
+description = "NORC Protocol Core - Core protocol types and message definitions"
+keywords = ["protocol", "messaging", "federation"]
+
+[lib]
+name = "norc_protocol"
+crate-type = ["lib"]
+
+[dependencies]
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+
+# Time handling
+time = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Binary encoding
+postcard = { workspace = true }
+
+# Cryptography
+ring = { workspace = true }
+ed25519-dalek = { workspace = true }
+x25519-dalek = { workspace = true }
+
+# Async utilities
+bytes = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tokio-test = { workspace = true }

@@ -1,5 +1,19 @@
-//! NORC TUI Components
+//! NORC TUI
 //!
-//! Provides a composable terminal user interface for the NORC client
+//! Terminal user interface components for NORC client applications.
 
-#![deny(unsafe_code)]
+/// TUI module (placeholder for future implementation)
+pub struct Tui;
+
+impl Tui {
+    /// Create a new TUI
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for Tui {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -6,5 +6,20 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NORC CLI utilities - Command line interface helpers"
-keywords = ["cli", "clap", "config"]
+description = "NORC CLI - Command line interface utilities"
+keywords = ["cli", "command", "args"]
+
+[lib]
+name = "norc_cli"
+crate-type = ["lib"]
+
+[dependencies]
+# CLI handling
+clap = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

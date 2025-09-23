@@ -1,6 +1,19 @@
-//! NORC CLI Utilities
+//! NORC CLI
 //!
-//! Provides unified command-line parsing and layered configuration loading for
-//! the NORC server and client binaries. Configuration precedence:
+//! Command line interface utilities for NORC applications.
 
-#![deny(unsafe_code, missing_docs)]
+/// CLI module (placeholder for future implementation)
+pub struct Cli;
+
+impl Cli {
+    /// Create a new CLI
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for Cli {
+    fn default() -> Self {
+        Self::new()
+    }
+}

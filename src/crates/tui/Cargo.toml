@@ -6,5 +6,23 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NORC TUI components - Terminal user interface"
+description = "NORC TUI - Terminal user interface components"
 keywords = ["tui", "terminal", "ui"]
+
+[lib]
+name = "norc_tui"
+crate-type = ["lib"]
+
+[dependencies]
+# Workspace crates
+norc-client-core = { path = "../client-core" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }

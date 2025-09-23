@@ -6,5 +6,27 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NORC Client Core - Headless client library"
-keywords = ["client", "norc", "chat"]
+description = "NORC Client Core - Core client functionality"
+keywords = ["client", "api"]
+
+[lib]
+name = "norc_client_core"
+crate-type = ["lib"]
+
+[dependencies]
+# Workspace crates
+norc-protocol = { path = "../protocol" }
+norc-transport = { path = "../transport" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
