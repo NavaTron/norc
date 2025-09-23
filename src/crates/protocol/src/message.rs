@@ -108,9 +108,7 @@ pub enum MessagePayload {
         data: serde_json::Value,
     },
     /// Ping message
-    Ping {
-        timestamp: u64,
-    },
+    Ping { timestamp: u64 },
     /// Pong response
     Pong {
         original_timestamp: u64,

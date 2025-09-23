@@ -7,13 +7,7 @@ type-complexity-threshold = 100
 
 # Be strict about potential issues
 avoid-breaking-exported-api = true
-enum-variant-names-threshold = 3
-
-# Don't warn about common patterns in our domain
-avoid = [
-    "clippy::module_name_repetitions",  # Common in protocol implementations
-    "clippy::similar_names",            # Cryptographic variables often have similar names
-]
+enum-variant-name-threshold = 3
 
 # Additional strict lints for production code
 disallowed-methods = [
@@ -21,6 +15,3 @@ disallowed-methods = [
     "std::process::exit",               # Use proper error handling
     "std::panic::catch_unwind",         # Explicit error handling preferred
 ]
-
-# Enforce documentation standards
-missing-docs-in-crate-items = true

@@ -9,6 +9,9 @@ repository.workspace = true
 description = "NORC Server"
 keywords = ["server", "chat", "federation"]
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "norc-server"
 path = "main.rs"

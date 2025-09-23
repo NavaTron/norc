@@ -6,8 +6,11 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NORC Protocol Core - Core protocol types and message definitions"
-keywords = ["protocol", "messaging", "federation"]
+description = "Core protocol types and cryptographic primitives for NORC"
+keywords = ["protocol", "crypto", "federation"]
+
+[lints]
+workspace = true
 
 [lib]
 name = "norc_protocol"

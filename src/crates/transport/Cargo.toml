@@ -6,8 +6,11 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NORC Transport - Network transport layer and connection management"
-keywords = ["transport", "network", "tls"]
+description = "Network transport layer for NORC"
+keywords = ["transport", "network"]
+
+[lints]
+workspace = true
 
 [lib]
 name = "norc_transport"

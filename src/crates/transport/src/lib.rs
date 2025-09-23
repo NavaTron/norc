@@ -6,4 +6,4 @@ pub mod error;
 pub mod tcp;
 pub mod tls;
 
-pub use error::{TransportError, Result};
+pub use error::{Result, TransportError};

@@ -6,8 +6,11 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NORC CLI - Command line interface utilities"
-keywords = ["cli", "command", "args"]
+description = "Command line interface library for NORC"
+keywords = ["cli", "command-line"]
+
+[lints]
+workspace = true
 
 [lib]
 name = "norc_cli"

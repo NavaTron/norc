@@ -3,14 +3,14 @@
 //! This crate contains the core protocol types, message definitions, and cryptographic
 //! primitives for the NavaTron Open Real-time Communication (NORC) protocol.
 
-pub mod error;
-pub mod message;
-pub mod identity;
 pub mod crypto;
+pub mod error;
+pub mod identity;
+pub mod message;
 
 pub use error::{ProtocolError, Result};
-pub use message::{Message, MessageType, MessageHeader, MessagePayload};
 pub use identity::{Identity, IdentityKeyPair, PublicKey};
+pub use message::{Message, MessageHeader, MessagePayload, MessageType};
 
 /// Protocol version constants
 pub const PROTOCOL_VERSION_MAJOR: u16 = 1;

@@ -6,8 +6,11 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NORC Configuration - Configuration management and parsing"
-keywords = ["config", "settings", "toml"]
+description = "Configuration management for NORC"
+keywords = ["config", "toml"]
+
+[lints]
+workspace = true
 
 [lib]
 name = "norc_config"

@@ -1,10 +1,10 @@
 //! Daemon process management and lifecycle
 
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
-use tracing::{info, warn, error, debug};
+use tokio::sync::{RwLock, broadcast};
+use tracing::{debug, error, info, warn};
 
-use crate::{ServerError, Result, Server, ServerConfig};
+use crate::{Result, Server, ServerConfig, ServerError};
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
@@ -89,7 +89,7 @@ impl Daemon {
 
         // Wait for shutdown signal
         let _ = shutdown_rx.recv().await;
-        
+
         info!("Received shutdown signal, shutting down gracefully...");
         self.shutdown().await?;
 
@@ -121,12 +121,14 @@ impl Daemon {
     fn setup_signal_handlers(&self, shutdown_tx: broadcast::Sender<()>) -> Result<()> {
         #[cfg(unix)]
         {
-            use tokio::signal::unix::{signal, SignalKind};
-            
-            let mut sigterm = signal(SignalKind::terminate())
-                .map_err(|e| ServerError::Lifecycle(format!("Failed to setup SIGTERM handler: {}", e)))?;
-            let mut sigint = signal(SignalKind::interrupt())
-                .map_err(|e| ServerError::Lifecycle(format!("Failed to setup SIGINT handler: {}", e)))?;
+            use tokio::signal::unix::{SignalKind, signal};
+
+            let mut sigterm = signal(SignalKind::terminate()).map_err(|e| {
+                ServerError::Lifecycle(format!("Failed to setup SIGTERM handler: {}", e))
+            })?;
+            let mut sigint = signal(SignalKind::interrupt()).map_err(|e| {
+                ServerError::Lifecycle(format!("Failed to setup SIGINT handler: {}", e))
+            })?;
 
             let shutdown_tx_term = shutdown_tx.clone();
             tokio::spawn(async move {
@@ -145,12 +147,14 @@ impl Daemon {
 
         #[cfg(windows)]
         {
-            use tokio::signal::windows::{ctrl_c, ctrl_break};
-            
-            let mut ctrl_c = ctrl_c()
-                .map_err(|e| ServerError::Lifecycle(format!("Failed to setup Ctrl+C handler: {}", e)))?;
-            let mut ctrl_break = ctrl_break()
-                .map_err(|e| ServerError::Lifecycle(format!("Failed to setup Ctrl+Break handler: {}", e)))?;
+            use tokio::signal::windows::{ctrl_break, ctrl_c};
+
+            let mut ctrl_c = ctrl_c().map_err(|e| {
+                ServerError::Lifecycle(format!("Failed to setup Ctrl+C handler: {}", e))
+            })?;
+            let mut ctrl_break = ctrl_break().map_err(|e| {
+                ServerError::Lifecycle(format!("Failed to setup Ctrl+Break handler: {}", e))
+            })?;
 
             let shutdown_tx_c = shutdown_tx.clone();
             tokio::spawn(async move {

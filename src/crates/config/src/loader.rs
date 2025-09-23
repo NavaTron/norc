@@ -13,7 +13,7 @@ impl ConfigLoader {
     /// Load configuration from a TOML file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<ServerConfiguration> {
         let path = path.as_ref();
-        
+
         // Check if file exists
         if !path.exists() {
             return Err(ConfigError::Io(std::io::Error::new(
@@ -23,12 +23,11 @@ impl ConfigLoader {
         }
 
         // Read file content
-        let content = fs::read_to_string(path)
-            .map_err(|e| ConfigError::Io(e))?;
+        let content = fs::read_to_string(path).map_err(ConfigError::Io)?;
 
         // Parse TOML
-        let mut config: ServerConfiguration = toml::from_str(&content)
-            .map_err(ConfigError::Toml)?;
+        let mut config: ServerConfiguration =
+            toml::from_str(&content).map_err(ConfigError::Toml)?;
 
         // Apply environment variable overrides
         Self::apply_env_overrides(&mut config)?;
@@ -78,27 +77,24 @@ impl ConfigLoader {
         if let Ok(bind_address) = env::var("NORC_BIND_ADDRESS") {
             config.network.bind_address = bind_address;
         }
-        
+
         if let Ok(federation_port) = env::var("NORC_FEDERATION_PORT") {
-            config.network.federation_port = federation_port.parse()
-                .map_err(|e| ConfigError::Environment(
-                    format!("Invalid NORC_FEDERATION_PORT: {}", e)
-                ))?;
+            config.network.federation_port = federation_port.parse().map_err(|e| {
+                ConfigError::Environment(format!("Invalid NORC_FEDERATION_PORT: {}", e))
+            })?;
         }
 
         if let Ok(connection_timeout) = env::var("NORC_CONNECTION_TIMEOUT") {
-            config.network.connection_timeout = connection_timeout.parse()
-                .map_err(|e| ConfigError::Environment(
-                    format!("Invalid NORC_CONNECTION_TIMEOUT: {}", e)
-                ))?;
+            config.network.connection_timeout = connection_timeout.parse().map_err(|e| {
+                ConfigError::Environment(format!("Invalid NORC_CONNECTION_TIMEOUT: {}", e))
+            })?;
         }
 
         // Security configuration
         if let Ok(enable_tls) = env::var("NORC_ENABLE_TLS") {
-            config.security.enable_tls = enable_tls.parse()
-                .map_err(|e| ConfigError::Environment(
-                    format!("Invalid NORC_ENABLE_TLS: {}", e)
-                ))?;
+            config.security.enable_tls = enable_tls
+                .parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid NORC_ENABLE_TLS: {}", e)))?;
         }
 
         if let Ok(tls_cert_path) = env::var("NORC_TLS_CERT_PATH") {
@@ -128,10 +124,9 @@ impl ConfigLoader {
 
         // Daemon configuration
         if let Ok(daemonize) = env::var("NORC_DAEMONIZE") {
-            config.daemon.daemonize = daemonize.parse()
-                .map_err(|e| ConfigError::Environment(
-                    format!("Invalid NORC_DAEMONIZE: {}", e)
-                ))?;
+            config.daemon.daemonize = daemonize
+                .parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid NORC_DAEMONIZE: {}", e)))?;
         }
 
         if let Ok(pid_file) = env::var("NORC_PID_FILE") {
@@ -148,25 +143,22 @@ impl ConfigLoader {
 
         // Performance configuration
         if let Ok(max_connections) = env::var("NORC_MAX_CONNECTIONS") {
-            config.performance.max_connections = max_connections.parse()
-                .map_err(|e| ConfigError::Environment(
-                    format!("Invalid NORC_MAX_CONNECTIONS: {}", e)
-                ))?;
+            config.performance.max_connections = max_connections.parse().map_err(|e| {
+                ConfigError::Environment(format!("Invalid NORC_MAX_CONNECTIONS: {}", e))
+            })?;
         }
 
         if let Ok(worker_threads) = env::var("NORC_WORKER_THREADS") {
-            let threads: usize = worker_threads.parse()
-                .map_err(|e| ConfigError::Environment(
-                    format!("Invalid NORC_WORKER_THREADS: {}", e)
-                ))?;
+            let threads: usize = worker_threads.parse().map_err(|e| {
+                ConfigError::Environment(format!("Invalid NORC_WORKER_THREADS: {}", e))
+            })?;
             config.performance.worker_threads = Some(threads);
         }
 
         if let Ok(max_message_size) = env::var("NORC_MAX_MESSAGE_SIZE") {
-            config.performance.max_message_size = max_message_size.parse()
-                .map_err(|e| ConfigError::Environment(
-                    format!("Invalid NORC_MAX_MESSAGE_SIZE: {}", e)
-                ))?;
+            config.performance.max_message_size = max_message_size.parse().map_err(|e| {
+                ConfigError::Environment(format!("Invalid NORC_MAX_MESSAGE_SIZE: {}", e))
+            })?;
         }
 
         Ok(())
@@ -178,8 +170,7 @@ impl ConfigLoader {
         let toml_content = toml::to_string_pretty(&config)
             .map_err(|e| ConfigError::Validation(format!("Failed to serialize config: {}", e)))?;
 
-        fs::write(path, toml_content)
-            .map_err(ConfigError::Io)?;
+        fs::write(path, toml_content).map_err(ConfigError::Io)?;
 
         Ok(())
     }
@@ -197,16 +188,18 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)] // Test code exception
+    #[allow(unsafe_code)] // Test environment variable manipulation
     fn test_env_override() {
         unsafe {
             env::set_var("NORC_BIND_ADDRESS", "127.0.0.1:8080");
             env::set_var("NORC_LOG_LEVEL", "debug");
         }
-        
+
         let config = ConfigLoader::from_env().unwrap();
         assert_eq!(config.network.bind_address, "127.0.0.1:8080");
         assert_eq!(config.logging.level, "debug");
-        
+
         unsafe {
             env::remove_var("NORC_BIND_ADDRESS");
             env::remove_var("NORC_LOG_LEVEL");

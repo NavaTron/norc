@@ -6,8 +6,11 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NORC Client Core - Core client functionality"
-keywords = ["client", "api"]
+description = "Core client functionality for NORC"
+keywords = ["client", "core"]
+
+[lints]
+workspace = true
 
 [lib]
 name = "norc_client_core"

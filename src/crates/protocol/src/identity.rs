@@ -1,8 +1,8 @@
 //!use ed25519_dalek::{SigningKey, VerifyingKey, Signature, Signer};Identity and key management
 
-use serde::{Deserialize, Serialize};
-use ed25519_dalek::{SigningKey, VerifyingKey, Signature, Signer, Verifier};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use ring::rand::SystemRandom;
+use serde::{Deserialize, Serialize};
 
 use crate::{ProtocolError, Result};
 
@@ -50,12 +50,13 @@ impl PublicKey {
     pub fn verify(&self, message: &[u8], signature: &[u8; 64]) -> Result<()> {
         let verifying_key = VerifyingKey::from_bytes(&self.key)
             .map_err(|e| ProtocolError::Crypto(format!("Invalid public key: {}", e)))?;
-        
+
         let signature = Signature::from_bytes(signature);
-        
-        verifying_key.verify(message, &signature)
+
+        verifying_key
+            .verify(message, &signature)
             .map_err(|e| ProtocolError::Crypto(format!("Signature verification failed: {}", e)))?;
-        
+
         Ok(())
     }
 }
@@ -65,14 +66,14 @@ impl IdentityKeyPair {
     pub fn generate() -> Result<Self> {
         let rng = SystemRandom::new();
         let mut seed = [0u8; 32];
-        
+
         // Generate random seed using ring's SystemRandom
         ring::rand::SecureRandom::fill(&rng, &mut seed)
             .map_err(|e| ProtocolError::Crypto(format!("Failed to generate random seed: {}", e)))?;
-        
+
         let signing_key = SigningKey::from_bytes(&seed);
         let verifying_key = signing_key.verifying_key();
-        
+
         Ok(Self {
             signing_key,
             verifying_key,
@@ -100,7 +101,7 @@ impl Identity {
     pub fn new(user_id: String, display_name: String) -> Result<Self> {
         let key_pair = IdentityKeyPair::generate()?;
         let public_key = key_pair.public_key();
-        
+
         Ok(Self {
             user_id,
             display_name,
@@ -128,7 +129,9 @@ impl Identity {
     pub fn sign(&self, message: &[u8]) -> Result<[u8; 64]> {
         match &self.key_pair {
             Some(key_pair) => Ok(key_pair.sign(message)),
-            None => Err(ProtocolError::Crypto("No private key available for signing".to_string())),
+            None => Err(ProtocolError::Crypto(
+                "No private key available for signing".to_string(),
+            )),
         }
     }
 

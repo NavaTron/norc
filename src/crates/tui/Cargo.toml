@@ -6,8 +6,11 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "NORC TUI - Terminal user interface components"
+description = "Terminal user interface for NORC"
 keywords = ["tui", "terminal", "ui"]
+
+[lints]
+workspace = true
 
 [lib]
 name = "norc_tui"

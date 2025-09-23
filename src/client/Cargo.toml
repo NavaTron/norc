@@ -8,6 +8,9 @@ rust-version.workspace = true
 repository.workspace = true
 description = "NORC Client - Terminal chat client"
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "norc-client"
 path = "main.rs"

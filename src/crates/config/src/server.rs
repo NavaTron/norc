@@ -1,12 +1,12 @@
 //! Server configuration structures
 
-use std::net::SocketAddr;
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 
 use crate::{ConfigError, Result};
 
 /// Complete server configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ServerConfiguration {
     /// Network configuration
     pub network: NetworkConfig,
@@ -18,18 +18,6 @@ pub struct ServerConfiguration {
     pub daemon: DaemonConfig,
     /// Performance configuration
     pub performance: PerformanceConfig,
-}
-
-impl Default for ServerConfiguration {
-    fn default() -> Self {
-        Self {
-            network: NetworkConfig::default(),
-            security: SecurityConfig::default(),
-            logging: LoggingConfig::default(),
-            daemon: DaemonConfig::default(),
-            performance: PerformanceConfig::default(),
-        }
-    }
 }
 
 /// Network configuration
@@ -117,7 +105,7 @@ impl Default for LoggingConfig {
 }
 
 /// Daemon configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DaemonConfig {
     /// Run as daemon (background process)
     pub daemonize: bool,
@@ -129,18 +117,6 @@ pub struct DaemonConfig {
     pub group: Option<String>,
     /// Working directory
     pub working_directory: Option<String>,
-}
-
-impl Default for DaemonConfig {
-    fn default() -> Self {
-        Self {
-            daemonize: false,
-            pid_file: None,
-            user: None,
-            group: None,
-            working_directory: None,
-        }
-    }
 }
 
 /// Performance configuration
@@ -162,7 +138,7 @@ impl Default for PerformanceConfig {
     fn default() -> Self {
         Self {
             max_connections: 1000,
-            worker_threads: None, // Use default (number of CPU cores)
+            worker_threads: None,          // Use default (number of CPU cores)
             max_message_size: 1024 * 1024, // 1MB
             connection_backlog: 128,
             tcp_nodelay: true,
@@ -174,7 +150,9 @@ impl ServerConfiguration {
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
         // Validate bind address
-        self.network.bind_address.parse::<SocketAddr>()
+        self.network
+            .bind_address
+            .parse::<SocketAddr>()
             .map_err(|e| ConfigError::InvalidValue {
                 field: "network.bind_address".to_string(),
                 message: format!("Invalid socket address: {}", e),
@@ -200,12 +178,12 @@ impl ServerConfiguration {
         if self.security.enable_tls {
             if self.security.tls_cert_path.is_none() {
                 return Err(ConfigError::MissingRequired(
-                    "security.tls_cert_path is required when TLS is enabled".to_string()
+                    "security.tls_cert_path is required when TLS is enabled".to_string(),
                 ));
             }
             if self.security.tls_key_path.is_none() {
                 return Err(ConfigError::MissingRequired(
-                    "security.tls_key_path is required when TLS is enabled".to_string()
+                    "security.tls_key_path is required when TLS is enabled".to_string(),
                 ));
             }
         }
@@ -213,19 +191,23 @@ impl ServerConfiguration {
         // Validate log level
         match self.logging.level.to_lowercase().as_str() {
             "trace" | "debug" | "info" | "warn" | "error" => {}
-            _ => return Err(ConfigError::InvalidValue {
-                field: "logging.level".to_string(),
-                message: "Must be one of: trace, debug, info, warn, error".to_string(),
-            }),
+            _ => {
+                return Err(ConfigError::InvalidValue {
+                    field: "logging.level".to_string(),
+                    message: "Must be one of: trace, debug, info, warn, error".to_string(),
+                });
+            }
         }
 
         // Validate log format
         match self.logging.format.to_lowercase().as_str() {
             "json" | "pretty" | "compact" => {}
-            _ => return Err(ConfigError::InvalidValue {
-                field: "logging.format".to_string(),
-                message: "Must be one of: json, pretty, compact".to_string(),
-            }),
+            _ => {
+                return Err(ConfigError::InvalidValue {
+                    field: "logging.format".to_string(),
+                    message: "Must be one of: json, pretty, compact".to_string(),
+                });
+            }
         }
 
         // Validate performance settings
@@ -248,7 +230,9 @@ impl ServerConfiguration {
 
     /// Get the parsed bind address
     pub fn bind_address(&self) -> Result<SocketAddr> {
-        self.network.bind_address.parse()
+        self.network
+            .bind_address
+            .parse()
             .map_err(|e| ConfigError::InvalidValue {
                 field: "network.bind_address".to_string(),
                 message: format!("Invalid socket address: {}", e),

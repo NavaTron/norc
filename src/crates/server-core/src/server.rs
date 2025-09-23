@@ -3,10 +3,10 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::sync::{broadcast, RwLock};
-use tracing::{info, warn, error, debug};
+use tokio::sync::{RwLock, broadcast};
+use tracing::{debug, error, info, warn};
 
-use crate::{ServerError, Result, Connection, ConnectionManager};
+use crate::{Connection, ConnectionManager, Result, ServerError};
 
 /// Server configuration
 #[derive(Debug, Clone)]
@@ -53,9 +53,9 @@ impl Server {
     /// Create a new server instance
     pub async fn new(config: ServerConfig) -> Result<Self> {
         debug!("Creating new server with config: {:?}", config);
-        
+
         let connection_manager = Arc::new(ConnectionManager::new(config.max_connections));
-        
+
         Ok(Self {
             config,
             connection_manager,
@@ -75,8 +75,14 @@ impl Server {
         }
 
         // Bind to the configured address
-        let listener = TcpListener::bind(&self.config.bind_address).await
-            .map_err(|e| ServerError::Lifecycle(format!("Failed to bind to {}: {}", self.config.bind_address, e)))?;
+        let listener = TcpListener::bind(&self.config.bind_address)
+            .await
+            .map_err(|e| {
+                ServerError::Lifecycle(format!(
+                    "Failed to bind to {}: {}",
+                    self.config.bind_address, e
+                ))
+            })?;
 
         info!("Server listening on {}", self.config.bind_address);
 
@@ -85,14 +91,14 @@ impl Server {
             // Check for shutdown signal
             if let Some(ref shutdown_tx) = *self.shutdown_tx.read().await {
                 let mut shutdown_rx = shutdown_tx.subscribe();
-                
+
                 tokio::select! {
                     // Accept new connection
                     result = listener.accept() => {
                         match result {
                             Ok((stream, addr)) => {
                                 debug!("Accepted connection from {}", addr);
-                                
+
                                 // Check connection limits
                                 if self.connection_manager.connection_count().await >= self.config.max_connections {
                                     warn!("Connection limit reached, rejecting connection from {}", addr);
@@ -103,7 +109,7 @@ impl Server {
                                 // Handle connection
                                 let connection_manager = self.connection_manager.clone();
                                 let config = self.config.clone();
-                                
+
                                 tokio::spawn(async move {
                                     if let Err(e) = Self::handle_connection(stream, addr, connection_manager, config).await {
                                         error!("Connection handling error for {}: {}", addr, e);
@@ -116,7 +122,7 @@ impl Server {
                             }
                         }
                     }
-                    
+
                     // Shutdown signal received
                     _ = shutdown_rx.recv() => {
                         info!("Server shutdown signal received");
@@ -143,16 +149,18 @@ impl Server {
 
         // Create connection wrapper
         let connection = Connection::new(stream, addr).await?;
-        
+
         // Register connection
-        let connection_id = connection_manager.add_connection(connection.clone()).await?;
-        
+        let connection_id = connection_manager
+            .add_connection(connection.clone())
+            .await?;
+
         // Handle connection lifecycle
         let result = connection.handle().await;
-        
+
         // Cleanup connection
         connection_manager.remove_connection(connection_id).await;
-        
+
         match result {
             Ok(_) => {
                 debug!("Connection from {} closed normally", addr);

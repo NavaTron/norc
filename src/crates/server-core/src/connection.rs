@@ -2,15 +2,15 @@
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error, info, warn};
 
-use norc_protocol::{Message, MessageType, MessagePayload, ProtocolError};
-use crate::{ServerError, Result};
+use crate::{Result, ServerError};
+use norc_protocol::{Message, MessagePayload, MessageType, ProtocolError};
 
 /// Unique connection identifier
 pub type ConnectionId = u64;
@@ -28,7 +28,7 @@ impl Connection {
     pub async fn new(stream: TcpStream, addr: SocketAddr) -> Result<Self> {
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        
+
         Ok(Self {
             id,
             addr,
@@ -51,7 +51,7 @@ impl Connection {
         debug!("Starting connection handler for {}", self.addr);
 
         let mut buffer = vec![0u8; 8192];
-        
+
         loop {
             // Read from connection
             let bytes_read = {
@@ -96,7 +96,10 @@ impl Connection {
         // Try to parse as a NORC protocol message
         match Message::from_bytes(data) {
             Ok(message) => {
-                debug!("Received message from {}: {:?}", self.addr, message.header.message_type);
+                debug!(
+                    "Received message from {}: {:?}",
+                    self.addr, message.header.message_type
+                );
                 self.handle_message(message).await
             }
             Err(ProtocolError::Serialization(_)) => {
@@ -116,7 +119,7 @@ impl Connection {
         match message.payload {
             MessagePayload::Ping { timestamp } => {
                 debug!("Handling ping from {}", self.addr);
-                
+
                 // Create pong response
                 let sender_key = message.header.sender.clone(); // Clone to avoid move
                 let pong_message = Message::new(
@@ -131,29 +134,39 @@ impl Connection {
                     message.header.recipient.unwrap_or(sender_key.clone()), // Use sender's key as response sender
                     Some(sender_key), // Send back to original sender
                 );
-                
+
                 Ok(Some(pong_message.to_bytes()?))
             }
-            
-            MessagePayload::Handshake { client_version, capabilities } => {
-                info!("Handshake from {}: version={}, capabilities={:?}", 
-                      self.addr, client_version, capabilities);
-                
+
+            MessagePayload::Handshake {
+                client_version,
+                capabilities,
+            } => {
+                info!(
+                    "Handshake from {}: version={}, capabilities={:?}",
+                    self.addr, client_version, capabilities
+                );
+
                 // TODO: Implement proper handshake logic
                 // For now, just acknowledge
                 Ok(None)
             }
-            
+
             MessagePayload::Text { content, channel } => {
-                info!("Text message from {}: channel={:?}, content='{}'", 
-                      self.addr, channel, content);
-                
+                info!(
+                    "Text message from {}: channel={:?}, content='{}'",
+                    self.addr, channel, content
+                );
+
                 // TODO: Implement message routing and storage
                 Ok(None)
             }
-            
+
             _ => {
-                debug!("Unhandled message type from {}: {:?}", self.addr, message.header.message_type);
+                debug!(
+                    "Unhandled message type from {}: {:?}",
+                    self.addr, message.header.message_type
+                );
                 Ok(None)
             }
         }
@@ -162,9 +175,13 @@ impl Connection {
     /// Send response data to the client
     async fn send_response(&self, data: Vec<u8>) -> Result<()> {
         let mut stream = self.stream.lock().await;
-        stream.write_all(&data).await
+        stream
+            .write_all(&data)
+            .await
             .map_err(|e| ServerError::Connection(format!("Write error: {}", e)))?;
-        stream.flush().await
+        stream
+            .flush()
+            .await
             .map_err(|e| ServerError::Connection(format!("Flush error: {}", e)))?;
         Ok(())
     }
@@ -173,7 +190,9 @@ impl Connection {
     pub async fn close(&self) -> Result<()> {
         debug!("Closing connection {}", self.addr);
         let mut stream = self.stream.lock().await;
-        stream.shutdown().await
+        stream
+            .shutdown()
+            .await
             .map_err(|e| ServerError::Connection(format!("Shutdown error: {}", e)))?;
         Ok(())
     }
@@ -199,22 +218,23 @@ impl ConnectionManager {
     /// Add a new connection
     pub async fn add_connection(&self, connection: Connection) -> Result<ConnectionId> {
         let connection_id = connection.id();
-        
+
         {
             let mut connections = self.connections.write().await;
-            
+
             if connections.len() >= self.max_connections {
-                return Err(ServerError::ResourceLimit(
-                    format!("Maximum connections ({}) reached", self.max_connections)
-                ));
+                return Err(ServerError::ResourceLimit(format!(
+                    "Maximum connections ({}) reached",
+                    self.max_connections
+                )));
             }
-            
+
             connections.insert(connection_id, connection);
         }
-        
+
         self.total_connections.fetch_add(1, Ordering::Relaxed);
         debug!("Added connection {}", connection_id);
-        
+
         Ok(connection_id)
     }
 
@@ -244,7 +264,7 @@ impl ConnectionManager {
     /// Shutdown all connections
     pub async fn shutdown_all(&self) {
         info!("Shutting down all connections...");
-        
+
         let connections = {
             let mut connections_guard = self.connections.write().await;
             let connections = connections_guard.clone();
@@ -257,7 +277,7 @@ impl ConnectionManager {
                 warn!("Error closing connection {}: {}", id, e);
             }
         }
-        
+
         info!("All connections closed");
     }
 
