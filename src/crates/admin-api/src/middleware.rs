@@ -5,21 +5,20 @@
 
 use crate::{
     auth::{ApiKeyStore, AuthContext},
-    ApiError, ApiResult,
+    ApiError,
 };
 use axum::{
-    body::Body,
     extract::{Request, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Rate limiter using token bucket algorithm

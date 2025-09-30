@@ -215,10 +215,6 @@ impl Transport for TlsServerTransport {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::tls_config::{create_client_config, create_server_config};
-    use std::path::PathBuf;
-
     // Note: These tests require valid test certificates
     // In a real implementation, we would generate test certs programmatically
 }

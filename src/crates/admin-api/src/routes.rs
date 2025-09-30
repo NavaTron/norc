@@ -10,7 +10,7 @@ use crate::{
 };
 use axum::{
     middleware,
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
     Router,
 };
 use std::sync::Arc;
@@ -83,14 +83,12 @@ pub fn build_routes(state: AdminApiState) -> Router {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::AdminApiConfig;
-    use norc_persistence::Database;
 
     #[tokio::test]
     async fn test_router_builds() {
         // This test just verifies the router can be constructed
-        let config = AdminApiConfig::default();
+        let _config = AdminApiConfig::default();
         
         // Mock database - in real tests, use a test database
         // let database = Arc::new(Database::new(...).await.unwrap());

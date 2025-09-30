@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use norc_config::{Cli, Commands, ServerConfig};
-use norc_server_core::{daemon::daemonize, init_logging, ServerCore, ServerError};
+use norc_server_core::{daemon::daemonize, init_logging, ServerCore};
 use std::process;
 use tracing::{error, info, warn};
 
@@ -96,9 +96,7 @@ async fn load_config(cli: &Cli) -> Result<ServerConfig> {
     };
 
     // Apply CLI overrides
-    let config = config
-        .merge_cli_overrides(cli)
-        .context("Failed to apply CLI overrides")?;
+    let config = config.merge_cli_overrides(cli);
 
     Ok(config)
 }
@@ -119,8 +117,7 @@ async fn generate_config_file(output_path: &std::path::Path, force: bool) -> Res
     }
 
     let default_config = ServerConfig::default();
-    let toml_content = default_config
-        .to_toml()
+    let toml_content = toml::to_string(&default_config)
         .context("Failed to serialize default config")?;
 
     if let Some(parent) = output_path.parent() {
@@ -171,7 +168,9 @@ async fn handle_command(command: &Commands, config: &ServerConfig) -> Result<()>
 
 /// Start the server
 async fn start_server(config: &ServerConfig, force: bool) -> Result<()> {
-    let mut server = ServerCore::new(config.clone());
+    let mut server = ServerCore::new(config.clone())
+        .await
+        .context("Failed to create server")?;
 
     // Check for existing instance unless forced
     if !force {
@@ -253,7 +252,7 @@ async fn check_status(config: &ServerConfig) -> Result<()> {
 }
 
 /// Reload configuration
-async fn reload_config(config: &ServerConfig) -> Result<()> {
+async fn reload_config(_config: &ServerConfig) -> Result<()> {
     // TODO: Send SIGHUP to running process
     println!("Configuration reload signal sent");
     Ok(())
@@ -276,7 +275,9 @@ async fn validate_config(config_path: &std::path::Path) -> Result<()> {
 
 /// Run the main server
 async fn run_server(config: ServerConfig) -> Result<()> {
-    let mut server = ServerCore::new(config);
+    let mut server = ServerCore::new(config)
+        .await
+        .context("Failed to create server")?;
     
     server
         .run()

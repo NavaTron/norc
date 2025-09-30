@@ -130,9 +130,8 @@ mod tests {
 
     #[test]
     fn test_get_effective_uid() {
-        let uid = get_effective_uid();
-        // Should return a valid UID
-        assert!(uid >= 0);
+        let _uid = get_effective_uid();
+        // UID is retrieved successfully if this doesn't panic
     }
     
     #[test]
