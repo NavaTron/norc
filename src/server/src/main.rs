@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use norc_config::{Cli, Commands, ServerConfig};
-use norc_server_core::{daemon::daemonize, init_logging, ServerCore};
+use norc_server_core::{daemon::daemonize, init_logging, ServerCore, ServerError};
 use std::process;
 use tracing::{error, info, warn};
 
@@ -96,7 +96,9 @@ async fn load_config(cli: &Cli) -> Result<ServerConfig> {
     };
 
     // Apply CLI overrides
-    let config = config.merge_cli_overrides(cli);
+    let config = config
+        .merge_cli_overrides(cli)
+        .context("Failed to apply CLI overrides")?;
 
     Ok(config)
 }
@@ -117,7 +119,8 @@ async fn generate_config_file(output_path: &std::path::Path, force: bool) -> Res
     }
 
     let default_config = ServerConfig::default();
-    let toml_content = toml::to_string_pretty(&default_config)
+    let toml_content = default_config
+        .to_toml()
         .context("Failed to serialize default config")?;
 
     if let Some(parent) = output_path.parent() {
@@ -168,9 +171,7 @@ async fn handle_command(command: &Commands, config: &ServerConfig) -> Result<()>
 
 /// Start the server
 async fn start_server(config: &ServerConfig, force: bool) -> Result<()> {
-    let mut server = ServerCore::new(config.clone())
-        .await
-        .context("Failed to create server instance")?;
+    let mut server = ServerCore::new(config.clone());
 
     // Check for existing instance unless forced
     if !force {
@@ -252,7 +253,7 @@ async fn check_status(config: &ServerConfig) -> Result<()> {
 }
 
 /// Reload configuration
-async fn reload_config(_config: &ServerConfig) -> Result<()> {
+async fn reload_config(config: &ServerConfig) -> Result<()> {
     // TODO: Send SIGHUP to running process
     println!("Configuration reload signal sent");
     Ok(())
@@ -275,9 +276,7 @@ async fn validate_config(config_path: &std::path::Path) -> Result<()> {
 
 /// Run the main server
 async fn run_server(config: ServerConfig) -> Result<()> {
-    let mut server = ServerCore::new(config)
-        .await
-        .context("Failed to create server instance")?;
+    let mut server = ServerCore::new(config);
     
     server
         .run()

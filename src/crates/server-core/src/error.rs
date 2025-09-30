@@ -56,4 +56,20 @@ pub enum ServerError {
     /// Prometheus error
     #[error("Prometheus error: {0}")]
     Prometheus(#[from] prometheus::Error),
+
+    /// Authentication/Authorization error
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+
+    /// Rate limit exceeded
+    #[error("Rate limit exceeded: {0}")]
+    RateLimitExceeded(String),
+
+    /// Cryptographic error
+    #[error("Cryptographic error: {0}")]
+    CryptoError(String),
+
+    /// Database error
+    #[error("Database error: {0}")]
+    Database(String),
 }

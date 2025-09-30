@@ -3,6 +3,7 @@
 //! Core server functionality including daemon management, connection handling,
 //! and signal processing per SERVER_REQUIREMENTS.
 
+pub mod auth;
 pub mod connection;
 pub mod connection_handler;
 pub mod connection_pool;
@@ -34,8 +35,14 @@ pub use security::{
     RateLimiterConfig, ValidationError,
 };
 pub use server::ServerCore;
-
 pub use signal_handler::{wait_for_shutdown, Signal};
+
+// Re-export auth types
+pub use auth::{
+    AuthContext, AuthResult, AuthenticationManager, DeviceAuthenticator, DeviceCredentials,
+    FederationAuthenticator, FederationCredentials, Permission, Role, Session, SessionManager,
+    SessionToken, AccessControl, RateLimiter as AuthRateLimiter, RateLimitConfig as AuthRateLimitConfig,
+};
 
 use norc_config::ServerConfig;
 use std::sync::Arc;
