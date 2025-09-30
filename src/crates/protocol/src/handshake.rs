@@ -1,6 +1,6 @@
 //! Handshake and key derivation per PROTOCOL_SPECIFICATION.md Section 3.4
 
-use crate::crypto::{Blake3Hasher, HkdfBlake3, X25519EphemeralKeyPair};
+use crate::crypto::{HkdfBlake3, X25519EphemeralKeyPair};
 use crate::error::{ProtocolError, Result};
 use crate::messages::{ClientHello, ServerHello};
 use crate::types::{Hash, SymmetricKey};
@@ -20,8 +20,8 @@ pub struct HandshakeState {
     peer_nonce: Option<[u8; 32]>,
     /// Negotiated version
     negotiated_version: Option<ProtocolVersion>,
-    /// Transcript hash
-    transcript_hash: Option<Hash>,
+    /// Transcript hash (for future use in key derivation)
+    _transcript_hash: Option<Hash>,
 }
 
 impl HandshakeState {
@@ -34,7 +34,7 @@ impl HandshakeState {
             our_nonce: crate::crypto::generate_random_bytes(32).try_into().unwrap(),
             peer_nonce: None,
             negotiated_version: None,
-            transcript_hash: None,
+            _transcript_hash: None,
         }
     }
 
@@ -47,7 +47,7 @@ impl HandshakeState {
             our_nonce: crate::crypto::generate_random_bytes(32).try_into().unwrap(),
             peer_nonce: None,
             negotiated_version: None,
-            transcript_hash: None,
+            _transcript_hash: None,
         }
     }
 

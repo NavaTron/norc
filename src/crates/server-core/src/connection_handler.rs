@@ -8,7 +8,6 @@ use norc_protocol::DeviceId;
 use norc_transport::{TlsServerTransport, Transport};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 /// Connection handler processes messages from a single client
@@ -20,12 +19,12 @@ pub struct ConnectionHandler {
     router: Arc<MessageRouter>,
     pool: Arc<ConnectionPool>,
     
-    // Repositories
-    device_repo: Arc<DeviceRepository>,
-    session_repo: Arc<SessionRepository>,
-    presence_repo: Arc<PresenceRepository>,
-    message_repo: Arc<MessageRepository>,
-    audit_repo: Arc<AuditRepository>,
+    // Repositories (will be used when implementing message handling)
+    _device_repo: Arc<DeviceRepository>,
+    _session_repo: Arc<SessionRepository>,
+    _presence_repo: Arc<PresenceRepository>,
+    _message_repo: Arc<MessageRepository>,
+    _audit_repo: Arc<AuditRepository>,
 }
 
 impl ConnectionHandler {
@@ -49,11 +48,11 @@ impl ConnectionHandler {
             transport,
             router,
             pool,
-            device_repo,
-            session_repo,
-            presence_repo,
-            message_repo,
-            audit_repo,
+            _device_repo: device_repo,
+            _session_repo: session_repo,
+            _presence_repo: presence_repo,
+            _message_repo: message_repo,
+            _audit_repo: audit_repo,
         }
     }
 

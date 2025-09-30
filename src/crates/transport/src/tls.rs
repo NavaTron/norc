@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsAcceptor, TlsConnector};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// TLS client transport
 pub struct TlsClientTransport {

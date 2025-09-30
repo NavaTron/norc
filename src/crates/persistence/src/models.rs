@@ -1,9 +1,7 @@
 //! Data models for persistence layer
 
 use chrono::{DateTime, Utc};
-use norc_protocol::{DeviceId, TrustLevel};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// User account
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

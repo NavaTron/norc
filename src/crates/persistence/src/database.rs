@@ -3,10 +3,9 @@
 use crate::error::{PersistenceError, Result};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use sqlx::migrate::MigrateDatabase;
-use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
-use tracing::{info, warn};
+use tracing::info;
 
 /// Database configuration
 #[derive(Debug, Clone)]

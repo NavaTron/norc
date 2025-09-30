@@ -1,7 +1,7 @@
 //! TLS configuration and certificate management
 //! Implements SERVER_REQUIREMENTS T-S-F-03.01.02 (Certificate validation)
 
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls_pemfile::{certs, private_key};
 use std::fs::File;

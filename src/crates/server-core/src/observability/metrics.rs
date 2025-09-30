@@ -6,8 +6,8 @@
 use crate::error::ServerError;
 use norc_config::ObservabilityConfig;
 use prometheus::{
-    Counter, CounterVec, Encoder, Gauge, GaugeVec, Histogram, HistogramOpts, HistogramVec, IntCounter,
-    IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder,
+    Encoder, Gauge, Histogram, HistogramOpts, HistogramVec, IntCounter,
+    IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
 };
 use std::sync::Arc;
 use tokio::net::TcpListener;

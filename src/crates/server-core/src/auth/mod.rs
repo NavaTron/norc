@@ -19,8 +19,7 @@ pub use rbac::{Permission, Role, AccessControl};
 pub use rate_limit::{RateLimiter, RateLimitConfig};
 
 use crate::ServerError;
-use norc_protocol::crypto::Ed25519KeyPair;
-use norc_protocol::types::{DeviceId, PublicKey};
+use norc_protocol::types::DeviceId;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

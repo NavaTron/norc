@@ -3,7 +3,6 @@
 //! Implements liveness and readiness probes for monitoring and orchestration.
 //! Complies with E-05 observability requirements.
 
-use crate::error::ServerError;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;

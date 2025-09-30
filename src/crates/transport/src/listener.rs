@@ -6,7 +6,6 @@ use crate::{
 };
 use rustls::ServerConfig;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::sync::Arc;
 use tokio::net::TcpListener as TokioTcpListener;
 use tokio::task::JoinHandle;

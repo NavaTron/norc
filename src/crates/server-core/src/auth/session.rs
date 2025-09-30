@@ -5,8 +5,6 @@
 use crate::ServerError;
 use norc_protocol::types::DeviceId;
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 /// Session token

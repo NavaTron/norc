@@ -9,7 +9,6 @@ use crate::{
 use norc_config::ServerConfig;
 use norc_persistence::{
     Database,
-    database::DatabaseConfig,
     repositories::{
         UserRepository, DeviceRepository, SessionRepository, MessageRepository,
         FederationRepository, PresenceRepository, AuditRepository,
@@ -19,7 +18,7 @@ use norc_transport::{ListenerConfig, NetworkListener};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 /// Main server implementation
 pub struct ServerCore {

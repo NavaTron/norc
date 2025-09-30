@@ -279,7 +279,7 @@ impl FederationEngine {
         let partners = self.partners.read().await;
         let partner = partners.get(&handshake.org_id);
 
-        let response = if let Some(partner) = partner {
+        let response = if let Some(_partner) = partner {
             // Simple protocol version check (for now, just check major version)
             let version_compatible = handshake.protocol_version.major == self.protocol_version.major;
             

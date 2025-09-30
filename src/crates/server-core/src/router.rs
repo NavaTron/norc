@@ -1,7 +1,7 @@
 //! Message router per SERVER_REQUIREMENTS F-03.04
 
-use norc_protocol::messages::{EncryptedMessage, MessageHeader};
-use norc_protocol::{DeviceId, MessageId};
+use norc_protocol::messages::EncryptedMessage;
+use norc_protocol::DeviceId;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
@@ -66,7 +66,7 @@ impl MessageRouter {
         let table = self.routing_table.read().await;
 
         // Look up recipient routing
-        let routing_entry = table.get(&message.recipient)
+        let _routing_entry = table.get(&message.recipient)
             .ok_or_else(|| format!("No route to device: {:?}", message.recipient))?;
 
         debug!("Routing message {:?} to {:?}", message.header.message_id, message.recipient);

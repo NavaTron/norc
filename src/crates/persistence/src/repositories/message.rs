@@ -1,6 +1,6 @@
 //! Message repository for offline message storage
 
-use crate::error::{PersistenceError, Result};
+use crate::error::Result;
 use crate::models::PersistedMessage;
 use chrono::{Duration, Utc};
 use sqlx::SqlitePool;
