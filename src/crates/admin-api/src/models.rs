@@ -261,6 +261,79 @@ pub struct FederationPartnerResponse {
 }
 
 // ============================================================================
+// Connection Management Models
+// ============================================================================
+
+/// Connection query parameters
+#[derive(Debug, Deserialize)]
+pub struct ConnectionQueryParams {
+    pub state: Option<String>,        // active, idle, closing
+    pub user_id: Option<Uuid>,
+    pub device_id: Option<Uuid>,
+    pub limit: Option<usize>,
+}
+
+/// Connection response
+#[derive(Debug, Serialize)]
+pub struct ConnectionResponse {
+    pub id: String,
+    pub user_id: Option<Uuid>,
+    pub device_id: Option<Uuid>,
+    pub remote_address: String,
+    pub state: String,
+    pub protocol: String,             // websocket, tcp, quic
+    pub connected_at: DateTime<Utc>,
+    pub last_activity: DateTime<Utc>,
+    pub bytes_sent: u64,
+    pub bytes_received: u64,
+    pub messages_sent: u64,
+    pub messages_received: u64,
+}
+
+/// Connection list response
+#[derive(Debug, Serialize)]
+pub struct ConnectionListResponse {
+    pub connections: Vec<ConnectionResponse>,
+    pub total: usize,
+}
+
+// ============================================================================
+// Session Management Models
+// ============================================================================
+
+/// Session query parameters
+#[derive(Debug, Deserialize)]
+pub struct SessionQueryParams {
+    pub user_id: Option<Uuid>,
+    pub device_id: Option<Uuid>,
+    pub active: Option<bool>,
+    pub limit: Option<usize>,
+}
+
+/// Session response
+#[derive(Debug, Serialize)]
+pub struct SessionResponse {
+    pub id: String,
+    pub user_id: Uuid,
+    pub device_id: Uuid,
+    pub username: String,
+    pub device_name: String,
+    pub state: String,                // active, suspended, expired
+    pub created_at: DateTime<Utc>,
+    pub last_active: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub connection_id: Option<String>,
+    pub remote_address: Option<String>,
+}
+
+/// Session list response
+#[derive(Debug, Serialize)]
+pub struct SessionListResponse {
+    pub sessions: Vec<SessionResponse>,
+    pub total: usize,
+}
+
+// ============================================================================
 // Audit Log Models
 // ============================================================================
 

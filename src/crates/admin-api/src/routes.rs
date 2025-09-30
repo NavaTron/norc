@@ -62,6 +62,15 @@ pub fn build_routes(state: AdminApiState) -> Router {
         .route("/api-keys/:id", delete(handlers::delete_api_key))
         .route("/api-keys/:id/revoke", post(handlers::revoke_api_key))
         
+        // Connection management (E-06.02)
+        .route("/connections", get(handlers::list_connections))
+        .route("/connections/:id", get(handlers::get_connection).delete(handlers::terminate_connection))
+        
+        // Session management (E-06.03)
+        .route("/sessions", get(handlers::list_sessions))
+        .route("/sessions/:id", get(handlers::get_session).delete(handlers::revoke_session))
+        .route("/users/:user_id/sessions", delete(handlers::revoke_user_sessions))
+        
         // Apply authentication and rate limiting middleware
         .layer(middleware::from_fn_with_state(
             rate_limiter.clone(),

@@ -72,6 +72,14 @@ pub enum Permission {
     ApiKeyCreate,
     ApiKeyRead,
     ApiKeyRevoke,
+    
+    // Connection management
+    ConnectionsRead,
+    ConnectionsManage,
+    
+    // Session management
+    SessionsRead,
+    SessionsManage,
 }
 
 impl Role {
@@ -91,6 +99,8 @@ impl Role {
                     FederationCreate, FederationRead, FederationUpdate, FederationDelete,
                     AuditRead, AuditExport, ComplianceReport,
                     ApiKeyCreate, ApiKeyRead, ApiKeyRevoke,
+                    ConnectionsRead, ConnectionsManage,
+                    SessionsRead, SessionsManage,
                 ].into_iter().collect()
             }
             
@@ -124,6 +134,8 @@ impl Role {
                     MetricsRead, HealthCheck, LogsRead,
                     ConfigRead,
                     AuditRead,
+                    ConnectionsRead, ConnectionsManage,
+                    SessionsRead, SessionsManage,
                 ].into_iter().collect()
             }
             

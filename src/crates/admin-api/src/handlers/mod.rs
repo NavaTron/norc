@@ -8,6 +8,8 @@ pub mod monitoring;
 pub mod federation;
 pub mod audit;
 pub mod api_keys;
+pub mod connections;
+pub mod sessions;
 
 pub use health::*;
 pub use users::*;
@@ -17,3 +19,5 @@ pub use monitoring::*;
 pub use federation::*;
 pub use audit::*;
 pub use api_keys::*;
+pub use connections::*;
+pub use sessions::*;
