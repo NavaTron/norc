@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Service Identification -->
+    <key>Label</key>
+    <string>com.navatron.norc</string>
+    
+    <key>Disabled</key>
+    <false/>
+    
+    <!-- Executable Configuration -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/norc-server</string>
+    </array>
+    
+    <!-- Working Directory -->
+    <key>WorkingDirectory</key>
+    <string>/usr/local/var/norc</string>
+    
+    <!-- User Context -->
+    <key>UserName</key>
+    <string>_norc</string>
+    <key>GroupName</key>
+    <string>_norc</string>
+    
+    <!-- Environment Variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>NORC_CONFIG</key>
+        <string>/usr/local/etc/norc/config.toml</string>
+        <key>NORC_LOG_LEVEL</key>
+        <string>info</string>
+        <key>NORC_LOG_FORMAT</key>
+        <string>json</string>
+        <key>RUST_BACKTRACE</key>
+        <string>1</string>
+    </dict>
+    
+    <!-- Run Settings -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+    
+    <!-- Restart Throttling -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    
+    <!-- Logging -->
+    <key>StandardOutPath</key>
+    <string>/usr/local/var/log/norc/stdout.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/usr/local/var/log/norc/stderr.log</string>
+    
+    <!-- Process Management -->
+    <key>ExitTimeOut</key>
+    <integer>30</integer>
+    
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>65536</integer>
+        <key>NumberOfProcesses</key>
+        <integer>4096</integer>
+    </dict>
+    
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>65536</integer>
+        <key>NumberOfProcesses</key>
+        <integer>4096</integer>
+    </dict>
+    
+    <!-- Network Sockets (optional - for socket activation) -->
+    <key>Sockets</key>
+    <dict>
+        <key>Listener</key>
+        <dict>
+            <key>SockServiceName</key>
+            <string>8883</string>
+            <key>SockProtocol</key>
+            <string>TCP</string>
+        </dict>
+    </dict>
+    
+    <!-- Launch Constraints -->
+    <key>LaunchOnlyOnce</key>
+    <false/>
+    
+    <key>AbandonProcessGroup</key>
+    <true/>
+    
+    <!-- Nice Level (process priority) -->
+    <key>Nice</key>
+    <integer>-5</integer>
+</dict>
+</plist>

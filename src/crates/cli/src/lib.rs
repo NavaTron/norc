@@ -1,19 +1,8 @@
 //! NORC CLI
 //!
-//! Command line interface utilities for NORC applications.
+//! Command line interface utilities and service management for NORC applications.
 
-// Placeholder implementation
-pub struct Cli;
+pub mod service;
 
-impl Cli {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for Cli {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+pub use service::{ServiceConfig, ServiceManager, ServiceStatus, get_service_manager, check_privileges};
 

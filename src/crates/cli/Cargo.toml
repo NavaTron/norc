@@ -10,6 +10,22 @@ description = "Command-line interface for NORC"
 keywords = ["cli", "terminal"]
 
 [dependencies]
-# Placeholder dependencies
 clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1.40", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Platform detection
+cfg-if = "1.0"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Linux-specific dependencies
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# macOS-specific dependencies
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# Windows-specific dependencies
+winapi = { version = "0.3", features = ["winsvc", "winbase", "winerror"] }
