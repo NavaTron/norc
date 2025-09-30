@@ -2,6 +2,7 @@
 //! Implements SERVER_REQUIREMENTS F-03.02 and F-03.04
 
 use crate::{ConnectionId, ConnectionPool, MessageRouter, ServerError};
+use norc_persistence::repositories::{DeviceRepository, SessionRepository, PresenceRepository, MessageRepository, AuditRepository};
 use norc_protocol::messages::EncryptedMessage;
 use norc_protocol::DeviceId;
 use norc_transport::{TlsServerTransport, Transport};
@@ -18,6 +19,13 @@ pub struct ConnectionHandler {
     transport: TlsServerTransport,
     router: Arc<MessageRouter>,
     pool: Arc<ConnectionPool>,
+    
+    // Repositories
+    device_repo: Arc<DeviceRepository>,
+    session_repo: Arc<SessionRepository>,
+    presence_repo: Arc<PresenceRepository>,
+    message_repo: Arc<MessageRepository>,
+    audit_repo: Arc<AuditRepository>,
 }
 
 impl ConnectionHandler {
@@ -28,6 +36,11 @@ impl ConnectionHandler {
         transport: TlsServerTransport,
         router: Arc<MessageRouter>,
         pool: Arc<ConnectionPool>,
+        device_repo: Arc<DeviceRepository>,
+        session_repo: Arc<SessionRepository>,
+        presence_repo: Arc<PresenceRepository>,
+        message_repo: Arc<MessageRepository>,
+        audit_repo: Arc<AuditRepository>,
     ) -> Self {
         Self {
             connection_id,
@@ -36,6 +49,11 @@ impl ConnectionHandler {
             transport,
             router,
             pool,
+            device_repo,
+            session_repo,
+            presence_repo,
+            message_repo,
+            audit_repo,
         }
     }
 
@@ -123,12 +141,18 @@ impl ConnectionHandler {
 }
 
 /// Start handling a new connection
+/// Handle a new connection (public API)
 pub async fn handle_connection(
     connection_id: ConnectionId,
     transport: TlsServerTransport,
     peer_addr: SocketAddr,
     router: Arc<MessageRouter>,
     pool: Arc<ConnectionPool>,
+    device_repo: Arc<DeviceRepository>,
+    session_repo: Arc<SessionRepository>,
+    presence_repo: Arc<PresenceRepository>,
+    message_repo: Arc<MessageRepository>,
+    audit_repo: Arc<AuditRepository>,
 ) {
     let handler = ConnectionHandler::new(
         connection_id,
@@ -136,6 +160,11 @@ pub async fn handle_connection(
         transport,
         router,
         pool,
+        device_repo,
+        session_repo,
+        presence_repo,
+        message_repo,
+        audit_repo,
     );
 
     if let Err(e) = handler.handle().await {

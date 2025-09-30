@@ -168,7 +168,9 @@ async fn handle_command(command: &Commands, config: &ServerConfig) -> Result<()>
 
 /// Start the server
 async fn start_server(config: &ServerConfig, force: bool) -> Result<()> {
-    let mut server = ServerCore::new(config.clone());
+    let mut server = ServerCore::new(config.clone())
+        .await
+        .context("Failed to create server instance")?;
 
     // Check for existing instance unless forced
     if !force {
@@ -273,7 +275,9 @@ async fn validate_config(config_path: &std::path::Path) -> Result<()> {
 
 /// Run the main server
 async fn run_server(config: ServerConfig) -> Result<()> {
-    let mut server = ServerCore::new(config);
+    let mut server = ServerCore::new(config)
+        .await
+        .context("Failed to create server instance")?;
     
     server
         .run()

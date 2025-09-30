@@ -14,6 +14,7 @@ keywords = ["server", "daemon", "federation"]
 norc-config = { path = "../config" }
 norc-protocol = { path = "../protocol" }
 norc-transport = { path = "../transport" }
+norc-persistence = { path = "../persistence" }
 
 # TLS support
 rustls = "0.23"

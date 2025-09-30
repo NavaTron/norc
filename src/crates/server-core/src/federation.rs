@@ -200,9 +200,9 @@ impl FederationEngine {
         );
         
         match TlsClientTransport::connect(&partner.address, tls_config).await {
-            Ok(transport) => {
+            Ok(mut transport) => {
                 // Perform federation handshake
-                match self.perform_handshake(&transport, &partner.org_id).await {
+                match self.perform_handshake(&mut transport, &partner.org_id).await {
                     Ok(_) => {
                         let connection = Arc::new(FederationConnection {
                             transport: Arc::new(Mutex::new(transport)),
@@ -237,7 +237,7 @@ impl FederationEngine {
     /// Perform federation handshake
     async fn perform_handshake(
         &self,
-        transport: &TlsClientTransport,
+        transport: &mut TlsClientTransport,
         org_id: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let handshake = FederationHandshake {
