@@ -1,0 +1,56 @@
+[package]
+name = "norc-admin-api"
+version = "0.1.0"
+edition = "2021"
+authors = ["NavaTron Holding B.V."]
+license = "Apache-2.0"
+description = "Administrative REST API for NORC server management"
+
+[dependencies]
+# Web framework
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors", "limit"] }
+hyper = "1.0"
+
+# Async runtime
+tokio = { version = "1.41", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Authentication & Security
+jsonwebtoken = "9"
+bcrypt = "0.15"
+rand = "0.8"
+sha2 = "0.10"
+hex = "0.4"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging & Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Validation
+validator = { version = "0.18", features = ["derive"] }
+
+# Internal dependencies
+norc-config = { path = "../config" }
+norc-persistence = { path = "../persistence" }
+norc-server-core = { path = "../server-core" }
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# UUID
+uuid = { version = "1.10", features = ["v4", "serde"] }
+
+[dev-dependencies]
+reqwest = { version = "0.12", features = ["json"] }
