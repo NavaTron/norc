@@ -13,6 +13,7 @@ pub enum Signal {
     Interrupt,
     Reload,
     Quit,
+    LogRotate,
 }
 
 /// Signal handler manager
@@ -61,39 +62,52 @@ impl SignalHandler {
 
     /// Install Unix-specific signal handlers
     #[cfg(unix)]
-    async fn install_unix_signals(&self, _tx: broadcast::Sender<Signal>) -> Result<(), ServerError> {
-        use nix::sys::signal::{self, SigHandler, Signal as NixSignal};
+    async fn install_unix_signals(&self, tx: broadcast::Sender<Signal>) -> Result<(), ServerError> {
+        use tokio::signal::unix::{signal, SignalKind};
         
         // SIGTERM handler
-        extern "C" fn handle_sigterm(_: i32) {
-            // Note: This is called from a signal handler context
-            // We should only do async-signal-safe operations here
-        }
-        
-        unsafe {
-            signal::signal(NixSignal::SIGTERM, SigHandler::Handler(handle_sigterm))
-                .map_err(|e| ServerError::Signal(format!("Failed to set SIGTERM handler: {}", e)))?;
-        }
+        let tx_term = tx.clone();
+        let mut sigterm = signal(SignalKind::terminate())
+            .map_err(|e| ServerError::Signal(format!("Failed to set SIGTERM handler: {}", e)))?;
+        tokio::spawn(async move {
+            while sigterm.recv().await.is_some() {
+                info!("Received SIGTERM signal");
+                let _ = tx_term.send(Signal::Terminate);
+            }
+        });
 
         // SIGQUIT handler
-        extern "C" fn handle_sigquit(_: i32) {
-            // Note: Same limitations as above
-        }
-        
-        unsafe {
-            signal::signal(NixSignal::SIGQUIT, SigHandler::Handler(handle_sigquit))
-                .map_err(|e| ServerError::Signal(format!("Failed to set SIGQUIT handler: {}", e)))?;
-        }
+        let tx_quit = tx.clone();
+        let mut sigquit = signal(SignalKind::quit())
+            .map_err(|e| ServerError::Signal(format!("Failed to set SIGQUIT handler: {}", e)))?;
+        tokio::spawn(async move {
+            while sigquit.recv().await.is_some() {
+                info!("Received SIGQUIT signal");
+                let _ = tx_quit.send(Signal::Quit);
+            }
+        });
 
         // SIGHUP handler (reload configuration)
-        extern "C" fn handle_sighup(_: i32) {
-            // Note: Same limitations as above
-        }
-        
-        unsafe {
-            signal::signal(NixSignal::SIGHUP, SigHandler::Handler(handle_sighup))
-                .map_err(|e| ServerError::Signal(format!("Failed to set SIGHUP handler: {}", e)))?;
-        }
+        let tx_hup = tx.clone();
+        let mut sighup = signal(SignalKind::hangup())
+            .map_err(|e| ServerError::Signal(format!("Failed to set SIGHUP handler: {}", e)))?;
+        tokio::spawn(async move {
+            while sighup.recv().await.is_some() {
+                info!("Received SIGHUP signal - triggering configuration reload");
+                let _ = tx_hup.send(Signal::Reload);
+            }
+        });
+
+        // SIGUSR1 handler (log rotation)
+        let tx_usr1 = tx.clone();
+        let mut sigusr1 = signal(SignalKind::user_defined1())
+            .map_err(|e| ServerError::Signal(format!("Failed to set SIGUSR1 handler: {}", e)))?;
+        tokio::spawn(async move {
+            while sigusr1.recv().await.is_some() {
+                info!("Received SIGUSR1 signal - triggering log rotation");
+                let _ = tx_usr1.send(Signal::LogRotate);
+            }
+        });
 
         info!("Unix signal handlers installed");
         Ok(())

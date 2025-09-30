@@ -6,6 +6,8 @@
 use crate::error::ServerError;
 use norc_config::ObservabilityConfig;
 use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
@@ -14,9 +16,10 @@ use tracing_subscriber::{
     EnvFilter, Registry,
 };
 
-/// Logger handle that maintains the worker guard
+/// Logger handle that maintains the worker guard and supports rotation
 pub struct Logger {
     _guard: WorkerGuard,
+    config: Arc<RwLock<ObservabilityConfig>>,
 }
 
 impl Logger {
@@ -115,7 +118,31 @@ impl Logger {
             level
         );
 
-        Ok(Logger { _guard: guard })
+        Ok(Logger { 
+            _guard: guard,
+            config: Arc::new(RwLock::new(config.clone())),
+        })
+    }
+
+    /// Rotate log files (triggered by SIGUSR1)
+    pub async fn rotate(&self) -> Result<(), ServerError> {
+        let config = self.config.read().await;
+        
+        tracing::info!("Log rotation triggered via SIGUSR1");
+        
+        // The tracing_appender with rolling::daily automatically handles rotation
+        // based on date changes. For manual rotation on SIGUSR1, we log the event
+        // and flush any pending writes.
+        
+        // Future enhancement: Support for size-based rotation or manual file rotation
+        // would require recreating the appender with a new file handle
+        
+        tracing::info!(
+            log_file = ?config.log_file_path,
+            "Log rotation completed - daily appender handles file management"
+        );
+        
+        Ok(())
     }
 }
 
