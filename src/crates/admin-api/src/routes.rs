@@ -28,7 +28,8 @@ pub fn build_routes(state: AdminApiState) -> Router {
     // Public routes (no authentication required)
     let public_routes = Router::new()
         .route("/health", get(handlers::health_check))
-        .route("/ready", get(handlers::readiness_check));
+        .route("/ready", get(handlers::readiness_check))
+        .route("/metrics", get(handlers::get_prometheus_metrics));
     
     // Protected routes (authentication required)
     let protected_routes = Router::new()

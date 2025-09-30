@@ -14,7 +14,7 @@ pub fn init_start_time() {
 }
 
 /// Get server uptime in seconds
-fn get_uptime_seconds() -> u64 {
+pub fn get_uptime_seconds() -> u64 {
     if let Some(start_time) = START_TIME.get() {
         SystemTime::now()
             .duration_since(*start_time)

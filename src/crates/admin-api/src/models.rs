@@ -219,6 +219,7 @@ pub struct FederationMetrics {
     pub partners: usize,
     pub active_connections: usize,
     pub messages_routed: u64,
+    pub errors: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -226,6 +227,7 @@ pub struct SystemMetrics {
     pub cpu_usage: f64,
     pub memory_mb: u64,
     pub disk_usage_mb: u64,
+    pub uptime_seconds: u64,
 }
 
 // ============================================================================
