@@ -333,13 +333,44 @@ pub struct ServerCore {
 
     /// Stop the server gracefully
     pub async fn stop(&mut self) -> Result<(), ServerError> {
+        use tokio::time::{timeout, Duration};
+
         {
             let mut state = self.state.write().await;
             *state = ServerState::Stopping;
         }
 
-        info!("Stopping NORC server gracefully...");
+        info!("Stopping NORC server gracefully (30-second timeout)...");
 
+        // Wrap graceful shutdown in a timeout
+        let shutdown_timeout = Duration::from_secs(30);
+        let shutdown_result = timeout(shutdown_timeout, self.graceful_shutdown()).await;
+
+        match shutdown_result {
+            Ok(Ok(())) => {
+                info!("NORC server stopped gracefully within timeout");
+            }
+            Ok(Err(e)) => {
+                error!("Error during graceful shutdown: {}", e);
+                // Continue to forced shutdown
+            }
+            Err(_) => {
+                warn!("Graceful shutdown exceeded 30-second timeout - forcing shutdown");
+                self.force_shutdown().await;
+            }
+        }
+
+        {
+            let mut state = self.state.write().await;
+            *state = ServerState::Stopped;
+        }
+
+        info!("NORC server stopped");
+        Ok(())
+    }
+
+    /// Perform graceful shutdown operations
+    async fn graceful_shutdown(&mut self) -> Result<(), ServerError> {
         // Stop listener first to prevent new connections
         if let Some(handle) = self.listener_handle.take() {
             handle.abort();
@@ -374,13 +405,39 @@ pub struct ServerCore {
             }
         }
 
-        {
-            let mut state = self.state.write().await;
-            *state = ServerState::Stopped;
+        Ok(())
+    }
+
+    /// Force immediate shutdown when graceful shutdown times out
+    async fn force_shutdown(&mut self) {
+        warn!("Forcing immediate shutdown - some operations may be incomplete");
+
+        // Abort listener if still running
+        if let Some(handle) = self.listener_handle.take() {
+            handle.abort();
         }
 
-        info!("NORC server stopped gracefully");
-        Ok(())
+        // Force close all connections without cleanup
+        let all_ids = self.connection_pool.get_all_ids().await;
+        let connection_count = all_ids.len();
+        for id in all_ids {
+            self.connection_pool.unregister(id).await;
+        }
+        warn!("Forcibly closed {} connections", connection_count);
+
+        // Attempt to stop daemon manager quickly
+        if let Some(daemon_manager) = &mut self.daemon_manager {
+            if let Err(e) = daemon_manager.stop().await {
+                error!("Error stopping daemon manager during forced shutdown: {}", e);
+            }
+        }
+
+        // Drop observability system without graceful shutdown
+        if let Some(observability) = self.observability.take() {
+            drop(observability);
+        }
+
+        warn!("Forced shutdown complete - service terminated");
     }
 
     /// Preserve critical state during shutdown
