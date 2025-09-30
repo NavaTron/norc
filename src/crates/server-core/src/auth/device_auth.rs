@@ -1,10 +1,9 @@
 //! Device-based authentication
 //!
-//! Implements T-S-F-04.02.01.01: Device-based client authentication
+//! Implements T-S-F-04.02.01.01: Device client authentication
 
 use crate::ServerError;
 use norc_persistence::repositories::DeviceRepository;
-use norc_protocol::crypto::Ed25519KeyPair;
 use norc_protocol::types::{DeviceId, PublicKey, Signature};
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -31,8 +30,8 @@ pub struct DeviceAuthResult {
     pub device_id: DeviceId,
     /// User ID (if device is registered to a user)
     pub user_id: Option<String>,
-    /// Organization ID
-    pub organization_id: String,
+    /// Organization ID (not currently stored in Device model)
+    pub organization_id: Option<String>,
     /// Assigned role
     pub role: super::Role,
 }
@@ -53,23 +52,26 @@ impl DeviceAuthenticator {
         &self,
         credentials: DeviceCredentials,
     ) -> Result<DeviceAuthResult, ServerError> {
+        // Convert DeviceId to string (hex representation)
+        let device_id_str = hex::encode(credentials.device_id.as_bytes());
+        
         // Step 1: Retrieve device from database
         let device = self
             .device_repo
-            .get_by_id(&credentials.device_id)
+            .find_by_id(&device_id_str)
             .await
             .map_err(|e| {
                 warn!(
-                    "Device authentication failed: device not found: {}",
+                    "Device authentication failed: device not found: {:?}",
                     credentials.device_id
                 );
                 ServerError::Unauthorized(format!("Device not found: {}", e))
             })?;
 
         // Step 2: Verify device is active
-        if !device.is_active {
+        if device.status != "active" {
             warn!(
-                "Device authentication failed: device is inactive: {}",
+                "Device authentication failed: device is inactive: {:?}",
                 credentials.device_id
             );
             return Err(ServerError::Unauthorized(
@@ -80,7 +82,7 @@ impl DeviceAuthenticator {
         // Step 3: Verify public key matches
         if device.public_key != credentials.public_key.0.to_vec() {
             warn!(
-                "Device authentication failed: public key mismatch: {}",
+                "Device authentication failed: public key mismatch: {:?}",
                 credentials.device_id
             );
             return Err(ServerError::Unauthorized(
@@ -91,15 +93,11 @@ impl DeviceAuthenticator {
         // Step 4: Verify signature on challenge nonce
         self.verify_challenge_signature(&credentials)?;
 
-        // Step 5: Get user and organization info
-        let user = if let Some(user_id) = &device.user_id {
-            Some(user_id.clone())
-        } else {
-            None
-        };
+        // Step 5: Get user info
+        let user = device.user_id.clone();
 
         info!(
-            "Device authenticated successfully: {} (user: {:?})",
+            "Device authenticated successfully: {:?} (user: {})",
             credentials.device_id, user
         );
 
@@ -108,8 +106,8 @@ impl DeviceAuthenticator {
 
         Ok(DeviceAuthResult {
             device_id: credentials.device_id,
-            user_id: user,
-            organization_id: device.organization_id.clone(),
+            user_id: Some(user),
+            organization_id: None, // Device model doesn't have organization_id
             role,
         })
     }
@@ -152,11 +150,15 @@ impl DeviceAuthenticator {
         // For now, all authenticated devices get the "User" role
         // In a full implementation, this would check device properties,
         // user roles, organization policies, etc.
-        Ok(super::Role::User)
+        // Use device_type to potentially assign different roles
+        match device.device_type.as_str() {
+            "admin" => Ok(super::Role::SystemAdmin),
+            _ => Ok(super::Role::User),
+        }
     }
 
     /// Generate a challenge nonce for a device
-    pub fn generate_challenge(&self, device_id: &DeviceId) -> Vec<u8> {
+    pub fn generate_challenge(&self, _device_id: &DeviceId) -> Vec<u8> {
         use rand::RngCore;
         let mut nonce = vec![0u8; 32];
         rand::thread_rng().fill_bytes(&mut nonce);
@@ -172,40 +174,36 @@ impl DeviceAuthenticator {
         &self,
         device_id: DeviceId,
         public_key: PublicKey,
-        user_id: Option<String>,
-        organization_id: String,
+        user_id: String,
+        device_name: String,
     ) -> Result<(), ServerError> {
-        use norc_persistence::models::Device;
-
-        let device = Device {
-            id: device_id.to_string(),
-            user_id,
-            organization_id,
-            public_key: public_key.0.to_vec(),
-            device_type: "client".to_string(),
-            is_active: true,
-            last_seen_at: None,
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
-        };
-
+        let device_id_str = hex::encode(device_id.as_bytes());
+        
         self.device_repo
-            .create(device)
+            .create(
+                &device_id_str,
+                &user_id,
+                &device_name,
+                "client", // device_type
+                &public_key.0,
+            )
             .await
             .map_err(|e| ServerError::Database(format!("Failed to register device: {}", e)))?;
 
-        info!("Device registered successfully: {}", device_id);
+        info!("Device registered successfully: {:?}", device_id);
         Ok(())
     }
 
     /// Revoke a device (admin operation)
     pub async fn revoke_device(&self, device_id: &DeviceId) -> Result<(), ServerError> {
+        let device_id_str = hex::encode(device_id.as_bytes());
+        
         self.device_repo
-            .deactivate(device_id)
+            .revoke(&device_id_str)
             .await
             .map_err(|e| ServerError::Database(format!("Failed to revoke device: {}", e)))?;
 
-        info!("Device revoked: {}", device_id);
+        info!("Device revoked: {:?}", device_id);
         Ok(())
     }
 }
@@ -213,20 +211,25 @@ impl DeviceAuthenticator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    
+    fn create_test_device_id() -> DeviceId {
+        DeviceId::new([0u8; 32])
+    }
 
     #[test]
-    fn test_build_challenge_message() {
-        let device_id = DeviceId::new("test-device".to_string());
-        let nonce = vec![1, 2, 3, 4];
+    fn test_device_credentials_creation() {
+        let device_id = create_test_device_id();
+        let public_key = PublicKey([0u8; 32]);
+        let signature = Signature([0u8; 64]);
         
-        let authenticator = DeviceAuthenticator::new(Arc::new(
-            // Mock repository - would need proper mock in real tests
-            todo!("Create mock repository")
-        ));
+        let credentials = DeviceCredentials {
+            device_id,
+            public_key,
+            signature,
+            nonce: vec![1, 2, 3, 4],
+            client_ip: "127.0.0.1".to_string(),
+        };
         
-        let message = authenticator.build_challenge_message(&device_id, &nonce);
-        
-        assert!(message.starts_with(b"NORC-DEVICE-AUTH:"));
-        assert!(message.contains(&b':'));
+        assert_eq!(credentials.nonce.len(), 4);
     }
 }

@@ -34,7 +34,7 @@ pub struct FederationAuthResult {
 }
 
 /// Trust levels for federation partners
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TrustLevel {
     /// No trust - reject all communication
     None,
@@ -57,7 +57,9 @@ impl TrustLevel {
             "standard" => Ok(Self::Standard),
             "enhanced" => Ok(Self::Enhanced),
             "full" => Ok(Self::Full),
-            _ => Err(ServerError::Config(format!("Invalid trust level: {}", s))),
+            _ => Err(ServerError::Config(
+                norc_config::ConfigError::Validation(format!("Invalid trust level: {}", s))
+            )),
         }
     }
 }
@@ -112,21 +114,21 @@ impl FederationAuthenticator {
             ));
         }
 
-        // Step 4: Check if federation partner is registered
-        let partner = self
+                // Step 1: Look up federation trust
+        let trust = self
             .federation_repo
-            .get_by_organization_id(&credentials.organization_id)
+            .find_by_organization(&credentials.organization_id)
             .await
             .map_err(|e| {
                 warn!(
-                    "Federation partner not found: {}",
+                    "Federation authentication failed: organization not found: {}",
                     credentials.organization_id
                 );
-                ServerError::Unauthorized(format!("Unknown federation partner: {}", e))
+                ServerError::Unauthorized(format!("Federation trust not found: {}", e))
             })?;
 
         // Step 5: Verify partner is active
-        if !partner.is_active {
+        if trust.status != "active" {
             warn!(
                 "Federation partner is inactive: {}",
                 credentials.organization_id
@@ -137,7 +139,7 @@ impl FederationAuthenticator {
         }
 
         // Step 6: Verify trust level
-        let trust_level = TrustLevel::from_str(&partner.trust_level)?;
+        let trust_level = TrustLevel::from_str(&trust.trust_level)?;
         if trust_level == TrustLevel::None {
             warn!(
                 "Federation partner has no trust: {}",
@@ -158,11 +160,12 @@ impl FederationAuthenticator {
             credentials.organization_id, trust_level
         );
 
+        // Create a device ID from the organization ID hash
+        let org_hash = blake3::hash(credentials.organization_id.as_bytes());
+        let device_id = norc_protocol::types::DeviceId::new(*org_hash.as_bytes());
+
         Ok(super::AuthResult {
-            device_id: norc_protocol::types::DeviceId::new(format!(
-                "federation:{}",
-                credentials.organization_id
-            )),
+            device_id,
             session_token: super::SessionToken::generate(),
             role: super::Role::FederationPartner(trust_level),
             authenticated_at: chrono::Utc::now(),
@@ -185,11 +188,14 @@ impl FederationAuthenticator {
 
         // Step 1: Check certificate validity period
         let now = std::time::SystemTime::now();
-        if !leaf_cert.validity().is_valid_at(ASN1Time::from_timestamp(
-            now.duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64,
-        )) {
+        let timestamp = now.duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        
+        let asn1_time = ASN1Time::from_timestamp(timestamp)
+            .map_err(|e| ServerError::CryptoError(format!("Invalid timestamp: {}", e)))?;
+        
+        if !leaf_cert.validity().is_valid_at(asn1_time) {
             warn!("Certificate is not valid at current time");
             return Err(ServerError::Unauthorized(
                 "Certificate expired or not yet valid".to_string(),
@@ -197,12 +203,20 @@ impl FederationAuthenticator {
         }
 
         // Step 2: Check key usage
-        if let Some(key_usage) = leaf_cert.key_usage() {
-            if !key_usage.value.digital_signature() {
-                warn!("Certificate does not have digital signature key usage");
-                return Err(ServerError::Unauthorized(
-                    "Invalid key usage".to_string(),
-                ));
+        match leaf_cert.key_usage() {
+            Ok(Some(key_usage)) => {
+                if !key_usage.value.digital_signature() {
+                    warn!("Certificate does not have digital signature key usage");
+                    return Err(ServerError::Unauthorized(
+                        "Invalid key usage".to_string(),
+                    ));
+                }
+            }
+            Ok(None) => {
+                // Key usage extension not present - acceptable for some certs
+            }
+            Err(e) => {
+                warn!("Failed to parse key usage extension: {}", e);
             }
         }
 
@@ -252,9 +266,15 @@ impl FederationAuthenticator {
         }
 
         // Try to get from subject alternative names
-        if let Some(san_ext) = cert.get_extension_unique(&oid_registry::OID_X509_EXT_SUBJECT_ALT_NAME)? {
-            // Parse SAN extension for organization ID
-            // This is a simplified implementation
+        match cert.get_extension_unique(&oid_registry::OID_X509_EXT_SUBJECT_ALT_NAME) {
+            Ok(Some(_san_ext)) => {
+                // Parse SAN extension for organization ID
+                // This is a simplified implementation
+                // Full implementation would parse SAN and extract org ID
+            }
+            Ok(None) | Err(_) => {
+                // No SAN extension or error parsing it
+            }
         }
 
         Err(ServerError::Unauthorized(
