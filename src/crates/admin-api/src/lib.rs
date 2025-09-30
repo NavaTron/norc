@@ -32,7 +32,14 @@ pub use rbac::{Role, Permission};
 
 use axum::Router;
 use std::sync::Arc;
-use norc_persistence::Database;
+use norc_persistence::{
+    Database,
+    repositories::{
+        UserRepository, DeviceRepository, SessionRepository,
+        MessageRepository, FederationRepository, PresenceRepository,
+        AuditRepository,
+    },
+};
 
 /// Admin API server configuration
 #[derive(Debug, Clone)]
@@ -78,6 +85,32 @@ impl Default for AdminApiConfig {
 pub struct AdminApiState {
     pub database: Arc<Database>,
     pub config: AdminApiConfig,
+    pub user_repo: Arc<UserRepository>,
+    pub device_repo: Arc<DeviceRepository>,
+    pub session_repo: Arc<SessionRepository>,
+    pub message_repo: Arc<MessageRepository>,
+    pub federation_repo: Arc<FederationRepository>,
+    pub presence_repo: Arc<PresenceRepository>,
+    pub audit_repo: Arc<AuditRepository>,
+}
+
+impl AdminApiState {
+    /// Create a new AdminApiState from database and config
+    pub fn new(database: Arc<Database>, config: AdminApiConfig) -> Self {
+        let pool = database.pool().clone();
+        
+        Self {
+            database,
+            config,
+            user_repo: Arc::new(UserRepository::new(pool.clone())),
+            device_repo: Arc::new(DeviceRepository::new(pool.clone())),
+            session_repo: Arc::new(SessionRepository::new(pool.clone())),
+            message_repo: Arc::new(MessageRepository::new(pool.clone())),
+            federation_repo: Arc::new(FederationRepository::new(pool.clone())),
+            presence_repo: Arc::new(PresenceRepository::new(pool.clone())),
+            audit_repo: Arc::new(AuditRepository::new(pool)),
+        }
+    }
 }
 
 /// Build the admin API router

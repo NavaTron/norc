@@ -44,7 +44,7 @@ pub struct CreateUserRequest {
 }
 
 /// User update request
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct UpdateUserRequest {
     #[validate(length(min = 3, max = 100))]
     pub username: Option<String>,

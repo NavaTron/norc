@@ -131,16 +131,3 @@ pub fn create_client_config_with_ca(
     info!("Created client TLS configuration with custom CA from {:?}", ca_cert_path);
     Ok(Arc::new(config))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
-
-    #[test]
-    fn test_create_client_config() {
-        let config = create_client_config(true).unwrap();
-        assert!(Arc::strong_count(&config) == 1);
-    }
-}

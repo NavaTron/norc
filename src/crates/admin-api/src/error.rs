@@ -38,6 +38,9 @@ pub enum ApiError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
 
+    #[error("Persistence error: {0}")]
+    Persistence(#[from] norc_persistence::error::PersistenceError),
+
     #[error("Validation error: {0}")]
     Validation(String),
 
@@ -63,7 +66,7 @@ impl IntoResponse for ApiError {
             ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, "bad_request"),
             ApiError::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
             ApiError::RateLimitExceeded => (StatusCode::TOO_MANY_REQUESTS, "rate_limit_exceeded"),
-            ApiError::Internal(_) | ApiError::Database(_) => {
+            ApiError::Internal(_) | ApiError::Database(_) | ApiError::Persistence(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
             }
             ApiError::Validation(_) => (StatusCode::BAD_REQUEST, "validation_error"),
