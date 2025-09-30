@@ -5,6 +5,7 @@ members = [
     "src/crates/transport", 
     "src/crates/client-core",
     "src/crates/server-core",
+    "src/crates/persistence",
     "src/crates/tui",
     "src/crates/cli",
     "src/crates/config",

@@ -6,6 +6,9 @@ use std::path::PathBuf;
 /// Complete server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
+    /// Organization ID for this server
+    pub organization_id: String,
+
     /// Server network configuration
     pub network: NetworkConfig,
 
@@ -216,6 +219,7 @@ pub struct StorageConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
+            organization_id: "example.org".to_string(),
             network: NetworkConfig {
                 bind_address: "0.0.0.0".to_string(),
                 bind_port: 8443,
