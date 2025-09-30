@@ -13,6 +13,24 @@ pub struct HealthResponse {
     pub timestamp: DateTime<Utc>,
     pub version: String,
     pub uptime_seconds: u64,
+    pub components: ComponentHealthStatus,
+}
+
+/// Detailed component health status
+#[derive(Debug, Serialize)]
+pub struct ComponentHealthStatus {
+    pub database: ComponentHealth,
+    pub transport: ComponentHealth,
+    pub federation: ComponentHealth,
+    pub crypto: ComponentHealth,
+}
+
+/// Individual component health
+#[derive(Debug, Serialize)]
+pub struct ComponentHealth {
+    pub status: String,      // "healthy", "degraded", "unhealthy"
+    pub message: Option<String>,
+    pub last_check: DateTime<Utc>,
 }
 
 /// API version information
