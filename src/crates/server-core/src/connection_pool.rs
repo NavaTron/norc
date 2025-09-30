@@ -172,6 +172,11 @@ impl ConnectionPool {
         self.connections.read().await.keys().copied().collect()
     }
     
+    /// Get all connections
+    pub async fn get_all(&self) -> Vec<ConnectionInfo> {
+        self.connections.read().await.values().cloned().collect()
+    }
+    
     /// Get active connection count
     pub async fn count(&self) -> usize {
         self.connections.read().await.len()

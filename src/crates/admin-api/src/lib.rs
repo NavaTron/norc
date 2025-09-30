@@ -40,6 +40,8 @@ use norc_persistence::{
         AuditRepository,
     },
 };
+use norc_config::ServerConfig;
+use norc_server_core::{ConnectionPool, MessageRouter, ObservabilitySystem};
 
 /// Admin API server configuration
 #[derive(Debug, Clone)]
@@ -85,6 +87,7 @@ impl Default for AdminApiConfig {
 pub struct AdminApiState {
     pub database: Arc<Database>,
     pub config: AdminApiConfig,
+    pub server_config: Arc<ServerConfig>,
     pub user_repo: Arc<UserRepository>,
     pub device_repo: Arc<DeviceRepository>,
     pub session_repo: Arc<SessionRepository>,
@@ -92,16 +95,29 @@ pub struct AdminApiState {
     pub federation_repo: Arc<FederationRepository>,
     pub presence_repo: Arc<PresenceRepository>,
     pub audit_repo: Arc<AuditRepository>,
+    
+    // Server runtime components
+    pub connection_pool: Arc<ConnectionPool>,
+    pub message_router: Arc<MessageRouter>,
+    pub observability: Arc<ObservabilitySystem>,
 }
 
 impl AdminApiState {
-    /// Create a new AdminApiState from database and config
-    pub fn new(database: Arc<Database>, config: AdminApiConfig) -> Self {
+    /// Create a new AdminApiState from database, configs, and server components
+    pub fn new(
+        database: Arc<Database>,
+        config: AdminApiConfig,
+        server_config: Arc<ServerConfig>,
+        connection_pool: Arc<ConnectionPool>,
+        message_router: Arc<MessageRouter>,
+        observability: Arc<ObservabilitySystem>,
+    ) -> Self {
         let pool = database.pool().clone();
         
         Self {
             database,
             config,
+            server_config,
             user_repo: Arc::new(UserRepository::new(pool.clone())),
             device_repo: Arc::new(DeviceRepository::new(pool.clone())),
             session_repo: Arc::new(SessionRepository::new(pool.clone())),
@@ -109,6 +125,9 @@ impl AdminApiState {
             federation_repo: Arc::new(FederationRepository::new(pool.clone())),
             presence_repo: Arc::new(PresenceRepository::new(pool.clone())),
             audit_repo: Arc::new(AuditRepository::new(pool)),
+            connection_pool,
+            message_router,
+            observability,
         }
     }
 }

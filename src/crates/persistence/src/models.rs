@@ -66,6 +66,31 @@ pub struct Session {
     pub created_at: DateTime<Utc>,
 }
 
+/// Session with user and device details (for API responses)
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct SessionWithDetails {
+    /// Session ID
+    pub id: String,
+    /// User ID
+    pub user_id: String,
+    /// Device ID
+    pub device_id: String,
+    /// Session token (for internal use, don't expose in API)
+    pub token: String,
+    /// IP address
+    pub ip_address: Option<String>,
+    /// User agent
+    pub user_agent: Option<String>,
+    /// Expiry timestamp
+    pub expires_at: DateTime<Utc>,
+    /// Created timestamp
+    pub created_at: DateTime<Utc>,
+    /// Username from users table
+    pub username: String,
+    /// Device name from devices table
+    pub device_name: Option<String>,
+}
+
 /// Persisted message for offline delivery
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct PersistedMessage {

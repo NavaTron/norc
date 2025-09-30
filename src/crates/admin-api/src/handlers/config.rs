@@ -8,61 +8,65 @@ use serde_json::{json, Value};
 
 /// Get current configuration (sanitized - secrets removed)
 pub async fn get_config(
-    State(_state): State<AdminApiState>,
+    State(state): State<AdminApiState>,
     Extension(auth): Extension<AuthContext>,
 ) -> ApiResult<Json<Value>> {
     auth.require_permission(Permission::ConfigRead)?;
     
-    // TODO: Get actual configuration from ServerCore when available
-    // For now, return a mock sanitized configuration structure
+    // Get actual configuration from state (with sensitive fields removed)
+    let cfg = &state.server_config;
     
     let config = json!({
-        "organization_id": "example-org",
+        "organization_id": cfg.security.organization_id,
         "network": {
-            "bind_address": "0.0.0.0",
-            "bind_port": 8883,
-            "federation_address": "0.0.0.0",
-            "federation_port": 8884,
-            "enable_tls": true,
-            "enable_websocket": true,
-            "enable_quic": false,
+            "bind_address": cfg.network.bind_address,
+            "bind_port": cfg.network.bind_port,
+            "federation_address": cfg.network.federation_address,
+            "federation_port": cfg.network.federation_port,
+            "enable_tls": cfg.network.enable_tls,
+            "enable_websocket": cfg.network.enable_websocket,
+            "enable_quic": cfg.network.enable_quic,
             // Note: tls_cert_path and tls_key_path intentionally omitted for security
         },
         "security": {
-            "organization_id": "example-org",
-            "default_trust_level": "authenticated",
-            "enable_pq_crypto": false,
-            "key_rotation_interval_secs": 86400,
-            "strict_cert_validation": true,
-            "enable_hsm": false,
+            "organization_id": cfg.security.organization_id,
+            "default_trust_level": format!("{:?}", cfg.security.default_trust_level),
+            "enable_pq_crypto": cfg.security.enable_pq_crypto,
+            "key_rotation_interval_secs": cfg.security.key_rotation_interval_secs,
+            "strict_cert_validation": cfg.security.strict_cert_validation,
+            "enable_hsm": cfg.security.enable_hsm,
         },
         "observability": {
-            "log_level": "info",
-            "log_format": "json",
-            "enable_metrics": true,
-            "metrics_port": 9090,
-            "enable_tracing": false,
-            "tracing_sample_rate": 1.0,
+            "log_level": cfg.observability.log_level,
+            "log_format": cfg.observability.log_format,
+            "enable_metrics": cfg.observability.enable_metrics,
+            "metrics_port": cfg.observability.metrics_port,
+            "enable_tracing": cfg.observability.enable_tracing,
+            "tracing_sample_rate": cfg.observability.tracing_sample_rate,
         },
         "federation": {
-            "enable_federation": true,
-            "max_partners": 100,
-            "sync_interval_secs": 300,
+            "enable_federation": cfg.federation.enable_federation,
+            "discovery_method": &cfg.federation.discovery_method,
+            "partner_count": cfg.federation.partners.len(),
         },
         "limits": {
-            "max_connections": 10000,
-            "max_message_size_bytes": 16777216,
-            "rate_limit_per_connection": 100,
-            "connection_timeout_secs": 300,
+            "max_connections": cfg.limits.max_connections,
+            "max_message_size": cfg.limits.max_message_size,
+            "rate_limit_per_connection": cfg.limits.rate_limit_per_connection,
+            "max_memory_per_connection": cfg.limits.max_memory_per_connection,
+            "worker_threads": cfg.limits.worker_threads,
         },
         "daemon": {
-            "auto_restart": true,
-            "max_restart_attempts": 3,
-            "restart_cooldown_secs": 60,
+            "daemonize": cfg.daemon.daemonize,
+            "auto_restart": cfg.daemon.auto_restart,
+            "max_restarts": cfg.daemon.max_restarts,
+            "restart_cooldown_secs": cfg.daemon.restart_cooldown_secs,
         },
         "storage": {
-            "data_dir": "/var/lib/norc",
-            "max_db_size_mb": 10240,
+            "data_dir": cfg.storage.data_dir.display().to_string(),
+            "enable_persistence": cfg.storage.enable_persistence,
+            "snapshot_interval_secs": cfg.storage.snapshot_interval_secs,
+            "max_snapshots": cfg.storage.max_snapshots,
         },
     });
     
