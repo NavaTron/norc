@@ -49,6 +49,10 @@ pub enum ServerError {
     #[error("Security error: {0}")]
     Security(String),
 
+    /// Routing error
+    #[error("Routing error: {0}")]
+    Routing(String),
+
     /// Prometheus error
     #[error("Prometheus error: {0}")]
     Prometheus(#[from] prometheus::Error),

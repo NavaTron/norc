@@ -4,6 +4,7 @@
 //! and signal processing per SERVER_REQUIREMENTS.
 
 pub mod connection;
+pub mod connection_handler;
 pub mod connection_pool;
 pub mod daemon;
 pub mod error;
@@ -16,6 +17,7 @@ pub mod security;
 pub mod server;
 pub mod signal_handler;
 
+pub use connection_handler::handle_connection;
 pub use connection_pool::{ConnectionId, ConnectionInfo, ConnectionPool, ConnectionPoolStats};
 pub use daemon::{daemonize, DaemonManager};
 pub use error::ServerError;

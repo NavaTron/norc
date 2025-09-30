@@ -1,19 +1,25 @@
-//! Transport layer for NORC protocol
+//! NORC Transport Layer
 //!
-//! Provides secure transport implementations:
-//! - TLS 1.3 over TCP
-//! - WebSocket over TLS  
+//! Implements transport protocols for NORC:
+//! - TLS 1.3 over TCP (primary)
+//! - WebSocket over TLS
 //! - QUIC (optional)
 
 pub mod error;
+pub mod listener;
+pub mod tcp;
 pub mod tls;
+pub mod tls_config;
 pub mod websocket;
 
 #[cfg(feature = "quic")]
 pub mod quic_transport;
 
-pub use error::{TransportError, Result};
+pub use error::{Result, TransportError};
+pub use listener::{ListenerConfig, NetworkListener};
+pub use tcp::TcpListener;
 pub use tls::{TlsClientTransport, TlsServerTransport};
+pub use tls_config::{create_client_config, create_server_config, TlsConfigError};
 pub use websocket::WebSocketTransport;
 
 use async_trait::async_trait;

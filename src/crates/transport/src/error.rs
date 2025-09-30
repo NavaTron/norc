@@ -33,6 +33,10 @@ pub enum TransportError {
     #[error("Message too large: {0} bytes")]
     MessageTooLarge(usize),
 
+    /// Configuration error
+    #[error("Configuration error: {0}")]
+    Configuration(String),
+
     /// Other error
     #[error("{0}")]
     Other(String),

@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsAcceptor, TlsConnector};
+use tracing::{debug, info, warn};
 
 /// TLS client transport
 pub struct TlsClientTransport {
@@ -35,13 +36,38 @@ impl TlsClientTransport {
         
         let stream = connector.connect(server_name, tcp_stream).await?;
         
+        info!("TLS connection established to {}", addr);
         Ok(Self { stream })
+    }
+
+    /// Get peer certificates
+    pub fn peer_certificates(&self) -> Option<Vec<rustls::pki_types::CertificateDer<'static>>> {
+        self.stream
+            .get_ref()
+            .1
+            .peer_certificates()
+            .map(|certs| certs.to_vec())
+    }
+
+    /// Get negotiated protocol (ALPN)
+    pub fn alpn_protocol(&self) -> Option<&[u8]> {
+        self.stream
+            .get_ref()
+            .1
+            .alpn_protocol()
     }
 }
 
 #[async_trait]
 impl Transport for TlsClientTransport {
     async fn send(&mut self, data: &[u8]) -> Result<()> {
+        // Validate message size
+        if data.len() > 16 * 1024 * 1024 {
+            return Err(TransportError::Protocol(
+                format!("Message too large: {} bytes", data.len())
+            ));
+        }
+
         // Write length prefix (4 bytes, big-endian)
         let len = data.len() as u32;
         self.stream.write_all(&len.to_be_bytes()).await?;
@@ -50,6 +76,7 @@ impl Transport for TlsClientTransport {
         self.stream.write_all(data).await?;
         self.stream.flush().await?;
         
+        debug!("Sent {} bytes over TLS", data.len());
         Ok(())
     }
 
@@ -59,29 +86,38 @@ impl Transport for TlsClientTransport {
         self.stream.read_exact(&mut len_buf).await?;
         let len = u32::from_be_bytes(len_buf) as usize;
         
+        // Validate message size
+        if len > 16 * 1024 * 1024 {
+            return Err(TransportError::Protocol(
+                format!("Message too large: {} bytes", len)
+            ));
+        }
+        
         // Read data
         let mut buf = BytesMut::with_capacity(len);
         buf.resize(len, 0);
         self.stream.read_exact(&mut buf).await?;
         
+        debug!("Received {} bytes over TLS", len);
         Ok(buf.freeze())
     }
 
     async fn close(&mut self) -> Result<()> {
         self.stream.shutdown().await?;
+        info!("TLS connection closed");
         Ok(())
     }
 
     fn is_connected(&self) -> bool {
-        // TLS stream doesn't provide a direct way to check connection state
-        // Assume connected unless explicitly closed
-        true
+        // Check underlying TCP connection
+        self.stream.get_ref().0.peer_addr().is_ok()
     }
 }
 
 /// TLS server transport
 pub struct TlsServerTransport {
     stream: tokio_rustls::server::TlsStream<TcpStream>,
+    peer_addr: std::net::SocketAddr,
 }
 
 impl TlsServerTransport {
@@ -90,16 +126,47 @@ impl TlsServerTransport {
         tcp_stream: TcpStream,
         config: Arc<ServerConfig>,
     ) -> Result<Self> {
+        let peer_addr = tcp_stream.peer_addr()?;
         let acceptor = TlsAcceptor::from(config);
         let stream = acceptor.accept(tcp_stream).await?;
         
-        Ok(Self { stream })
+        info!("TLS connection accepted from {}", peer_addr);
+        Ok(Self { stream, peer_addr })
+    }
+
+    /// Get peer address
+    pub fn peer_addr(&self) -> std::net::SocketAddr {
+        self.peer_addr
+    }
+
+    /// Get peer certificates
+    pub fn peer_certificates(&self) -> Option<Vec<rustls::pki_types::CertificateDer<'static>>> {
+        self.stream
+            .get_ref()
+            .1
+            .peer_certificates()
+            .map(|certs| certs.to_vec())
+    }
+
+    /// Get negotiated protocol (ALPN)
+    pub fn alpn_protocol(&self) -> Option<&[u8]> {
+        self.stream
+            .get_ref()
+            .1
+            .alpn_protocol()
     }
 }
 
 #[async_trait]
 impl Transport for TlsServerTransport {
     async fn send(&mut self, data: &[u8]) -> Result<()> {
+        // Validate message size
+        if data.len() > 16 * 1024 * 1024 {
+            return Err(TransportError::Protocol(
+                format!("Message too large: {} bytes", data.len())
+            ));
+        }
+
         // Write length prefix (4 bytes, big-endian)
         let len = data.len() as u32;
         self.stream.write_all(&len.to_be_bytes()).await?;
@@ -108,6 +175,7 @@ impl Transport for TlsServerTransport {
         self.stream.write_all(data).await?;
         self.stream.flush().await?;
         
+        debug!("Sent {} bytes over TLS to {}", data.len(), self.peer_addr);
         Ok(())
     }
 
@@ -117,22 +185,40 @@ impl Transport for TlsServerTransport {
         self.stream.read_exact(&mut len_buf).await?;
         let len = u32::from_be_bytes(len_buf) as usize;
         
+        // Validate message size
+        if len > 16 * 1024 * 1024 {
+            return Err(TransportError::Protocol(
+                format!("Message too large: {} bytes", len)
+            ));
+        }
+        
         // Read data
         let mut buf = BytesMut::with_capacity(len);
         buf.resize(len, 0);
         self.stream.read_exact(&mut buf).await?;
         
+        debug!("Received {} bytes over TLS from {}", len, self.peer_addr);
         Ok(buf.freeze())
     }
 
     async fn close(&mut self) -> Result<()> {
         self.stream.shutdown().await?;
+        info!("TLS connection from {} closed", self.peer_addr);
         Ok(())
     }
 
     fn is_connected(&self) -> bool {
-        // TLS stream doesn't provide a direct way to check connection state
-        // Assume connected unless explicitly closed
-        true
+        // Check underlying TCP connection
+        self.stream.get_ref().0.peer_addr().is_ok()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tls_config::{create_client_config, create_server_config};
+    use std::path::PathBuf;
+
+    // Note: These tests require valid test certificates
+    // In a real implementation, we would generate test certs programmatically
 }
