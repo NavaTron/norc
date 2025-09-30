@@ -96,9 +96,7 @@ async fn load_config(cli: &Cli) -> Result<ServerConfig> {
     };
 
     // Apply CLI overrides
-    let config = config
-        .merge_cli_overrides(cli)
-        .context("Failed to apply CLI overrides")?;
+    let config = config.merge_cli_overrides(cli);
 
     Ok(config)
 }
@@ -119,8 +117,7 @@ async fn generate_config_file(output_path: &std::path::Path, force: bool) -> Res
     }
 
     let default_config = ServerConfig::default();
-    let toml_content = default_config
-        .to_toml()
+    let toml_content = toml::to_string_pretty(&default_config)
         .context("Failed to serialize default config")?;
 
     if let Some(parent) = output_path.parent() {

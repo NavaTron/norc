@@ -9,17 +9,17 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 /// Initialize logging system
 pub fn init_logging(config: &ServerConfig) -> Result<(), ServerError> {
-    let logging_config = &config.logging;
+    let logging_config = &config.observability;
 
     // Parse log level
-    let level = parse_log_level(&logging_config.level)?;
+    let level = parse_log_level(&logging_config.log_level)?;
 
     // Create environment filter
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(level.as_str()));
 
     // Initialize based on format
-    match logging_config.format.as_str() {
+    match logging_config.log_format.as_str() {
         "json" => {
             let subscriber = FmtSubscriber::builder()
                 .with_env_filter(env_filter)
@@ -54,7 +54,7 @@ pub fn init_logging(config: &ServerConfig) -> Result<(), ServerError> {
             return Err(ServerError::Config(
                 norc_config::ConfigError::Validation(format!(
                     "Unknown log format: {}",
-                    logging_config.format
+                    logging_config.log_format
                 )),
             ));
         }

@@ -10,6 +10,42 @@ description = "NORC Protocol implementation"
 keywords = ["protocol", "crypto", "federation"]
 
 [dependencies]
-# Placeholder dependencies
+# Serialization
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+serde-big-array = "0.5"
+
+# Cryptography - Production-ready implementations
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+chacha20poly1305 = { version = "0.10", features = ["std"] }
+blake3 = { version = "1.5", features = ["traits-preview"] }
+rand = { version = "0.8", features = ["std", "getrandom"] }
+rand_core = { version = "0.6", features = ["std"] }
+zeroize = { version = "1.8", features = ["derive", "alloc"] }
+subtle = "2.6"
+
+# Post-quantum cryptography
+pqcrypto-kyber = "0.8"
+pqcrypto-traits = "0.3"
+
+# Time and encoding
+chrono = { version = "0.4", features = ["serde"] }
+hex = "0.4"
+base64 = "0.22"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Async runtime
 tokio = { version = "1.40", features = ["full"] }
+
+# Hashing and MAC
+hkdf = "0.12"
+sha2 = "0.10"
+
+# Utilities
+bytes = "1.7"
+once_cell = "1.20"
