@@ -8,9 +8,6 @@ rust-version.workspace = true
 repository.workspace = true
 description = "NORC Client - Terminal chat client"
 
-[lints]
-workspace = true
-
-[[bin]]
-name = "norc-client"
-path = "main.rs"
+[dependencies]
+# Placeholder dependencies for the client
+tokio = { version = "1.40", features = ["full"] }

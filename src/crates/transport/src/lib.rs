@@ -1,9 +1,20 @@
 //! NORC Transport Layer
 //!
-//! Network transport layer and connection management for the NORC protocol.
+//! NORC Transport Layer
+//!
+//! Network transport layer for the NORC protocol.
 
-pub mod error;
-pub mod tcp;
-pub mod tls;
+// Placeholder implementation
+pub struct Transport;
 
-pub use error::{Result, TransportError};
+impl Transport {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for Transport {
+    fn default() -> Self {
+        Self::new()
+    }
+}

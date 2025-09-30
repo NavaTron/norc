@@ -2,11 +2,10 @@
 //!
 //! Command line interface utilities for NORC applications.
 
-/// CLI module (placeholder for future implementation)
+// Placeholder implementation
 pub struct Cli;
 
 impl Cli {
-    /// Create a new CLI
     pub fn new() -> Self {
         Self
     }
@@ -17,3 +16,4 @@ impl Default for Cli {
         Self::new()
     }
 }
+

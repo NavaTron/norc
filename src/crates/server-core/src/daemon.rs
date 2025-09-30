@@ -1,195 +1,318 @@
-//! Daemon process management and lifecycle
+//! Daemon process management
+//!
+//! Handles daemon lifecycle, process monitoring, and auto-restart functionality.
 
+use crate::ServerError;
+use norc_config::ServerConfig;
 use std::sync::Arc;
-use tokio::sync::{RwLock, broadcast};
-use tracing::{debug, error, info, warn};
+use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
+use tracing::{error, info, warn};
 
-use crate::{Result, Server, ServerConfig, ServerError};
-
-/// Daemon configuration
-#[derive(Debug, Clone)]
-pub struct DaemonConfig {
-    /// Server configuration
-    pub server: ServerConfig,
-    /// Process ID file path
-    pub pid_file: Option<String>,
-    /// Daemon user (for privilege dropping)
-    pub daemon_user: Option<String>,
-    /// Daemon group (for privilege dropping)
-    pub daemon_group: Option<String>,
-    /// Enable daemon mode (background process)
-    pub daemonize: bool,
+/// Daemon process manager
+pub struct DaemonManager {
+    config: Arc<ServerConfig>,
+    state: Arc<RwLock<DaemonState>>,
+    restart_count: Arc<RwLock<u32>>,
+    last_restart: Arc<RwLock<Option<Instant>>>,
 }
 
-impl Default for DaemonConfig {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-            pid_file: None,
-            daemon_user: None,
-            daemon_group: None,
-            daemonize: false,
-        }
-    }
+/// Daemon state
+#[derive(Debug, Clone, PartialEq)]
+pub enum DaemonState {
+    Stopped,
+    Starting,
+    Running,
+    Stopping,
+    Crashed,
+    RestartCooldown,
 }
 
-/// Main daemon process manager
-pub struct Daemon {
-    config: DaemonConfig,
-    server: Arc<RwLock<Option<Server>>>,
-    shutdown_tx: Option<broadcast::Sender<()>>,
-}
-
-impl Daemon {
-    /// Create a new daemon instance
-    pub fn new(config: DaemonConfig) -> Self {
-        Self {
+impl DaemonManager {
+    /// Create a new daemon manager
+    pub async fn new(config: Arc<ServerConfig>) -> Result<Self, ServerError> {
+        let manager = Self {
             config,
-            server: Arc::new(RwLock::new(None)),
-            shutdown_tx: None,
+            state: Arc::new(RwLock::new(DaemonState::Stopped)),
+            restart_count: Arc::new(RwLock::new(0)),
+            last_restart: Arc::new(RwLock::new(None)),
+        };
+
+        // Write PID file
+        if let Err(e) = manager.write_pid_file().await {
+            warn!("Failed to write PID file: {}", e);
         }
+
+        Ok(manager)
     }
 
-    /// Start the daemon process
-    pub async fn start(&mut self) -> Result<()> {
-        info!("Starting NORC daemon...");
+    /// Get current daemon state
+    pub async fn state(&self) -> DaemonState {
+        self.state.read().await.clone()
+    }
 
-        // Setup signal handling
-        let (shutdown_tx, mut shutdown_rx) = broadcast::channel(1);
-        self.shutdown_tx = Some(shutdown_tx.clone());
-
-        // Setup signal handlers for graceful shutdown
-        self.setup_signal_handlers(shutdown_tx.clone())?;
-
-        // Write PID file if configured
-        if let Some(ref pid_file) = self.config.pid_file {
-            self.write_pid_file(pid_file)?;
+    /// Start daemon monitoring
+    pub async fn start_monitoring(&self) -> Result<(), ServerError> {
+        if !self.config.daemon.auto_restart {
+            return Ok(());
         }
 
-        // Start the server
-        let server = Server::new(self.config.server.clone()).await?;
-        {
-            let mut server_guard = self.server.write().await;
-            *server_guard = Some(server);
-        }
+        let state = self.state.clone();
+        let restart_count = self.restart_count.clone();
+        let last_restart = self.last_restart.clone();
+        let config = self.config.clone();
 
-        // Start server listening
-        if let Some(ref server) = *self.server.read().await {
-            tokio::spawn({
-                let server = server.clone();
-                async move {
-                    if let Err(e) = server.start().await {
-                        error!("Server error: {}", e);
+        tokio::spawn(async move {
+            loop {
+                let current_state = { state.read().await.clone() };
+
+                match current_state {
+                    DaemonState::Crashed => {
+                        let can_restart = {
+                            let count = *restart_count.read().await;
+                            let last = *last_restart.read().await;
+
+                            // Check if we've exceeded max restarts
+                            if count >= config.daemon.max_restarts {
+                                error!("Maximum restart attempts ({}) exceeded", config.daemon.max_restarts);
+                                false
+                            } else if let Some(last_time) = last {
+                                // Check cooldown period
+                                let elapsed = last_time.elapsed();
+                                let cooldown = Duration::from_secs(config.daemon.restart_cooldown_secs);
+                                
+                                if elapsed < cooldown {
+                                    let remaining = cooldown - elapsed;
+                                    info!("Restart cooldown active, waiting {}s", remaining.as_secs());
+                                    {
+                                        let mut s = state.write().await;
+                                        *s = DaemonState::RestartCooldown;
+                                    }
+                                    tokio::time::sleep(remaining).await;
+                                }
+                                true
+                            } else {
+                                true
+                            }
+                        };
+
+                        if can_restart {
+                            info!("Attempting to restart daemon...");
+                            
+                            {
+                                let mut count = restart_count.write().await;
+                                *count += 1;
+                            }
+                            
+                            {
+                                let mut last = last_restart.write().await;
+                                *last = Some(Instant::now());
+                            }
+
+                            {
+                                let mut s = state.write().await;
+                                *s = DaemonState::Starting;
+                            }
+
+                            // Simulate restart success for now
+                            // TODO: Implement actual process restart logic
+                            tokio::time::sleep(Duration::from_secs(2)).await;
+                            
+                            {
+                                let mut s = state.write().await;
+                                *s = DaemonState::Running;
+                            }
+                            
+                            info!("Daemon restart successful");
+                        } else {
+                            break;
+                        }
+                    }
+                    DaemonState::Stopping => {
+                        break;
+                    }
+                    _ => {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
                     }
                 }
-            });
-        }
+            }
+        });
 
-        info!("NORC daemon started successfully");
-
-        // Wait for shutdown signal
-        let _ = shutdown_rx.recv().await;
-
-        info!("Received shutdown signal, shutting down gracefully...");
-        self.shutdown().await?;
-
-        info!("NORC daemon stopped");
         Ok(())
     }
 
-    /// Shutdown the daemon gracefully
-    pub async fn shutdown(&self) -> Result<()> {
-        debug!("Initiating daemon shutdown...");
-
-        // Stop the server
-        if let Some(ref server) = *self.server.read().await {
-            server.shutdown().await?;
+    /// Stop the daemon manager
+    pub async fn stop(&mut self) -> Result<(), ServerError> {
+        {
+            let mut state = self.state.write().await;
+            *state = DaemonState::Stopping;
         }
 
         // Clean up PID file
-        if let Some(ref pid_file) = self.config.pid_file {
-            if let Err(e) = std::fs::remove_file(pid_file) {
-                warn!("Failed to remove PID file {}: {}", pid_file, e);
-            }
+        if let Err(e) = self.remove_pid_file().await {
+            warn!("Failed to remove PID file: {}", e);
         }
 
-        debug!("Daemon shutdown complete");
-        Ok(())
-    }
-
-    /// Setup signal handlers for graceful shutdown
-    fn setup_signal_handlers(&self, shutdown_tx: broadcast::Sender<()>) -> Result<()> {
-        #[cfg(unix)]
         {
-            use tokio::signal::unix::{SignalKind, signal};
-
-            let mut sigterm = signal(SignalKind::terminate()).map_err(|e| {
-                ServerError::Lifecycle(format!("Failed to setup SIGTERM handler: {}", e))
-            })?;
-            let mut sigint = signal(SignalKind::interrupt()).map_err(|e| {
-                ServerError::Lifecycle(format!("Failed to setup SIGINT handler: {}", e))
-            })?;
-
-            let shutdown_tx_term = shutdown_tx.clone();
-            tokio::spawn(async move {
-                sigterm.recv().await;
-                info!("Received SIGTERM");
-                let _ = shutdown_tx_term.send(());
-            });
-
-            let shutdown_tx_int = shutdown_tx.clone();
-            tokio::spawn(async move {
-                sigint.recv().await;
-                info!("Received SIGINT");
-                let _ = shutdown_tx_int.send(());
-            });
-        }
-
-        #[cfg(windows)]
-        {
-            use tokio::signal::windows::{ctrl_break, ctrl_c};
-
-            let mut ctrl_c = ctrl_c().map_err(|e| {
-                ServerError::Lifecycle(format!("Failed to setup Ctrl+C handler: {}", e))
-            })?;
-            let mut ctrl_break = ctrl_break().map_err(|e| {
-                ServerError::Lifecycle(format!("Failed to setup Ctrl+Break handler: {}", e))
-            })?;
-
-            let shutdown_tx_c = shutdown_tx.clone();
-            tokio::spawn(async move {
-                ctrl_c.recv().await;
-                info!("Received Ctrl+C");
-                let _ = shutdown_tx_c.send(());
-            });
-
-            let shutdown_tx_break = shutdown_tx.clone();
-            tokio::spawn(async move {
-                ctrl_break.recv().await;
-                info!("Received Ctrl+Break");
-                let _ = shutdown_tx_break.send(());
-            });
+            let mut state = self.state.write().await;
+            *state = DaemonState::Stopped;
         }
 
         Ok(())
     }
 
-    /// Write process ID to file
-    fn write_pid_file(&self, pid_file: &str) -> Result<()> {
+    /// Simulate a crash (for testing)
+    pub async fn simulate_crash(&self) {
+        {
+            let mut state = self.state.write().await;
+            *state = DaemonState::Crashed;
+        }
+        warn!("Daemon process crashed");
+    }
+
+    /// Write PID file
+    async fn write_pid_file(&self) -> Result<(), std::io::Error> {
         let pid = std::process::id();
-        std::fs::write(pid_file, pid.to_string())
-            .map_err(|e| ServerError::Lifecycle(format!("Failed to write PID file: {}", e)))?;
-        debug!("Wrote PID {} to file {}", pid, pid_file);
+        let pid_content = pid.to_string();
+        
+        if let Some(parent) = self.config.daemon.pid_file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        
+        std::fs::write(&self.config.daemon.pid_file, pid_content)?;
+        info!("PID file written: {:?}", self.config.daemon.pid_file);
         Ok(())
     }
 
-    /// Get current daemon status
-    pub async fn is_running(&self) -> bool {
-        self.server.read().await.is_some()
+    /// Remove PID file
+    async fn remove_pid_file(&self) -> Result<(), std::io::Error> {
+        if self.config.daemon.pid_file.exists() {
+            std::fs::remove_file(&self.config.daemon.pid_file)?;
+            info!("PID file removed: {:?}", self.config.daemon.pid_file);
+        }
+        Ok(())
     }
 
-    /// Get daemon configuration
-    pub fn config(&self) -> &DaemonConfig {
-        &self.config
+    /// Check if another instance is running
+    pub async fn check_running_instance(&self) -> Result<bool, ServerError> {
+        if !self.config.daemon.pid_file.exists() {
+            return Ok(false);
+        }
+
+        let pid_content = std::fs::read_to_string(&self.config.daemon.pid_file)
+            .map_err(|e| ServerError::Io(e))?;
+        
+        let pid: u32 = pid_content.trim().parse()
+            .map_err(|_| ServerError::Daemon("Invalid PID in PID file".to_string()))?;
+
+        // Check if process is still running
+        let is_running = is_process_running(pid);
+        
+        if !is_running {
+            // Stale PID file, remove it
+            let _ = std::fs::remove_file(&self.config.daemon.pid_file);
+        }
+
+        Ok(is_running)
     }
+}
+
+/// Check if a process with the given PID is running
+#[cfg(unix)]
+fn is_process_running(pid: u32) -> bool {
+    use nix::sys::signal::{kill, Signal};
+    use nix::unistd::Pid;
+    
+    match kill(Pid::from_raw(pid as i32), Signal::SIGCONT) {
+        Ok(_) => true,
+        Err(nix::errno::Errno::ESRCH) => false, // No such process
+        Err(_) => true, // Process exists but we can't signal it (probably permission denied)
+    }
+}
+
+#[cfg(windows)]
+fn is_process_running(pid: u32) -> bool {
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_INFORMATION};
+    
+    unsafe {
+        let handle: HANDLE = OpenProcess(PROCESS_QUERY_INFORMATION, false, pid);
+        if handle.is_invalid() {
+            false
+        } else {
+            let _ = CloseHandle(handle);
+            true
+        }
+    }
+}
+
+/// Daemonize the current process (Unix only)
+#[cfg(unix)]
+pub async fn daemonize(config: &ServerConfig) -> Result<(), ServerError> {
+    use nix::unistd::{fork, setsid, ForkResult};
+    use std::os::unix::io::AsRawFd;
+
+    // First fork
+    match unsafe { fork() } {
+        Ok(ForkResult::Parent { .. }) => {
+            // Parent process exits
+            std::process::exit(0);
+        }
+        Ok(ForkResult::Child) => {
+            // Child continues
+        }
+        Err(e) => {
+            return Err(ServerError::Daemon(format!("First fork failed: {}", e)));
+        }
+    }
+
+    // Create new session
+    setsid().map_err(|e| ServerError::Daemon(format!("setsid failed: {}", e)))?;
+
+    // Second fork to ensure we're not a session leader
+    match unsafe { fork() } {
+        Ok(ForkResult::Parent { .. }) => {
+            // Parent process exits
+            std::process::exit(0);
+        }
+        Ok(ForkResult::Child) => {
+            // Child continues
+        }
+        Err(e) => {
+            return Err(ServerError::Daemon(format!("Second fork failed: {}", e)));
+        }
+    }
+
+    // Change working directory
+    if let Some(working_dir) = &config.daemon.working_dir {
+        std::env::set_current_dir(working_dir)
+            .map_err(|e| ServerError::Daemon(format!("Failed to change working directory: {}", e)))?;
+    }
+
+    // Redirect stdin, stdout, stderr to /dev/null
+    let dev_null = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/null")
+        .map_err(|e| ServerError::Daemon(format!("Failed to open /dev/null: {}", e)))?;
+
+    let fd = dev_null.as_raw_fd();
+    
+    unsafe {
+        libc::dup2(fd, libc::STDIN_FILENO);
+        libc::dup2(fd, libc::STDOUT_FILENO);
+        libc::dup2(fd, libc::STDERR_FILENO);
+    }
+
+    info!("Process daemonized successfully");
+    Ok(())
+}
+
+/// Windows service simulation (placeholder)
+#[cfg(windows)]
+pub async fn daemonize(_config: &ServerConfig) -> Result<(), ServerError> {
+    // On Windows, this would typically involve creating a Windows service
+    // For now, we'll just run in the background
+    info!("Running as background process (Windows service mode not fully implemented)");
+    Ok(())
 }

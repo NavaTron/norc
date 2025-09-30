@@ -1,18 +1,17 @@
 //! NORC Client Core
 //!
-//! Core client functionality for connecting to NORC servers.
+//! Core client functionality for NORC.
 
-/// Client module (placeholder for future implementation)
-pub struct Client;
+// Placeholder implementation
+pub struct ClientCore;
 
-impl Client {
-    /// Create a new client
+impl ClientCore {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for Client {
+impl Default for ClientCore {
     fn default() -> Self {
         Self::new()
     }

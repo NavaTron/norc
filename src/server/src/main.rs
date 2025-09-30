@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use norc_config::{Cli, Commands, ServerConfig};
-use norc_server_core::{daemon::daemonize, init_logging, ServerCore, ServerError};
+use norc_server_core::{daemon::daemonize, init_logging, ServerCore};
 use std::process;
 use tracing::{error, info, warn};
 
@@ -253,7 +253,7 @@ async fn check_status(config: &ServerConfig) -> Result<()> {
 }
 
 /// Reload configuration
-async fn reload_config(config: &ServerConfig) -> Result<()> {
+async fn reload_config(_config: &ServerConfig) -> Result<()> {
     // TODO: Send SIGHUP to running process
     println!("Configuration reload signal sent");
     Ok(())

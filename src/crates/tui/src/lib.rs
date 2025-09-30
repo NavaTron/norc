@@ -1,12 +1,13 @@
 //! NORC TUI
 //!
-//! Terminal user interface components for NORC client applications.
+//! NORC Terminal UI
+//!
+//! Terminal user interface components for NORC.
 
-/// TUI module (placeholder for future implementation)
+// Placeholder implementation
 pub struct Tui;
 
 impl Tui {
-    /// Create a new TUI
     pub fn new() -> Self {
         Self
     }

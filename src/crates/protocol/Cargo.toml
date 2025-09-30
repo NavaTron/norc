@@ -6,39 +6,10 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "Core protocol types and cryptographic primitives for NORC"
+description = "NORC Protocol implementation"
 keywords = ["protocol", "crypto", "federation"]
 
-[lints]
-workspace = true
-
-[lib]
-name = "norc_protocol"
-crate-type = ["lib"]
-
 [dependencies]
-# Serialization
-serde = { workspace = true }
-serde_json = { workspace = true }
-uuid = { workspace = true }
-
-# Time handling
-time = { workspace = true }
-
-# Error handling
-thiserror = { workspace = true }
-
-# Binary encoding
-postcard = { workspace = true }
-
-# Cryptography
-ring = { workspace = true }
-ed25519-dalek = { workspace = true }
-x25519-dalek = { workspace = true }
-
-# Async utilities
-bytes = { workspace = true }
-
-[dev-dependencies]
-proptest = { workspace = true }
-tokio-test = { workspace = true }
+# Placeholder dependencies
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.40", features = ["full"] }

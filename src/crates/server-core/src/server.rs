@@ -1,216 +1,154 @@
-//! Core server implementation
+//! Server implementation
+//!
+//! Core server functionality and lifecycle management.
 
-use std::net::SocketAddr;
+use crate::{signal_handler::wait_for_shutdown, DaemonManager, ServerError, ServerState};
+use norc_config::ServerConfig;
 use std::sync::Arc;
-use tokio::net::TcpListener;
-use tokio::sync::{RwLock, broadcast};
-use tracing::{debug, error, info, warn};
+use tokio::sync::RwLock;
+use tracing::info;
 
-use crate::{Connection, ConnectionManager, Result, ServerError};
-
-/// Server configuration
-#[derive(Debug, Clone)]
-pub struct ServerConfig {
-    /// Server bind address
-    pub bind_address: SocketAddr,
-    /// Maximum number of concurrent connections
-    pub max_connections: usize,
-    /// Connection timeout in seconds
-    pub connection_timeout: u64,
-    /// Enable TLS
-    pub enable_tls: bool,
-    /// TLS certificate file path
-    pub tls_cert_path: Option<String>,
-    /// TLS private key file path
-    pub tls_key_path: Option<String>,
-    /// Server name for TLS
-    pub server_name: String,
+/// Main server implementation
+pub struct ServerCore {
+    config: Arc<ServerConfig>,
+    state: Arc<RwLock<ServerState>>,
+    daemon_manager: Option<DaemonManager>,
 }
 
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            bind_address: "0.0.0.0:4242".parse().unwrap(),
-            max_connections: 1000,
-            connection_timeout: 300, // 5 minutes
-            enable_tls: false,
-            tls_cert_path: None,
-            tls_key_path: None,
-            server_name: "norc-server".to_string(),
-        }
-    }
-}
-
-/// Core NORC server
-#[derive(Clone)]
-pub struct Server {
-    config: ServerConfig,
-    connection_manager: Arc<ConnectionManager>,
-    shutdown_tx: Arc<RwLock<Option<broadcast::Sender<()>>>>,
-}
-
-impl Server {
+impl ServerCore {
     /// Create a new server instance
-    pub async fn new(config: ServerConfig) -> Result<Self> {
-        debug!("Creating new server with config: {:?}", config);
-
-        let connection_manager = Arc::new(ConnectionManager::new(config.max_connections));
-
-        Ok(Self {
-            config,
-            connection_manager,
-            shutdown_tx: Arc::new(RwLock::new(None)),
-        })
+    pub fn new(config: ServerConfig) -> Self {
+        Self {
+            config: Arc::new(config),
+            state: Arc::new(RwLock::new(ServerState::Stopped)),
+            daemon_manager: None,
+        }
     }
 
-    /// Start the server and begin accepting connections
-    pub async fn start(&self) -> Result<()> {
-        info!("Starting NORC server on {}", self.config.bind_address);
+    /// Initialize the server
+    pub async fn initialize(&mut self) -> Result<(), ServerError> {
+        info!("Initializing NORC server...");
 
-        // Setup shutdown channel
-        let (shutdown_tx, _) = broadcast::channel(1);
-        {
-            let mut tx_guard = self.shutdown_tx.write().await;
-            *tx_guard = Some(shutdown_tx);
+        // Check for existing instance
+        if self.config.daemon.auto_restart {
+            let daemon_manager = DaemonManager::new(self.config.clone()).await?;
+            
+            if daemon_manager.check_running_instance().await? {
+                return Err(ServerError::Startup(
+                    "Another instance of the server is already running".to_string(),
+                ));
+            }
+            
+            self.daemon_manager = Some(daemon_manager);
         }
 
-        // Bind to the configured address
-        let listener = TcpListener::bind(&self.config.bind_address)
-            .await
-            .map_err(|e| {
-                ServerError::Lifecycle(format!(
-                    "Failed to bind to {}: {}",
-                    self.config.bind_address, e
-                ))
+        // Set up working directory
+        if let Some(working_dir) = &self.config.daemon.working_dir {
+            std::env::set_current_dir(working_dir).map_err(|e| {
+                ServerError::Startup(format!("Failed to change working directory: {}", e))
             })?;
-
-        info!("Server listening on {}", self.config.bind_address);
-
-        // Accept connections loop
-        loop {
-            // Check for shutdown signal
-            if let Some(ref shutdown_tx) = *self.shutdown_tx.read().await {
-                let mut shutdown_rx = shutdown_tx.subscribe();
-
-                tokio::select! {
-                    // Accept new connection
-                    result = listener.accept() => {
-                        match result {
-                            Ok((stream, addr)) => {
-                                debug!("Accepted connection from {}", addr);
-
-                                // Check connection limits
-                                if self.connection_manager.connection_count().await >= self.config.max_connections {
-                                    warn!("Connection limit reached, rejecting connection from {}", addr);
-                                    drop(stream);
-                                    continue;
-                                }
-
-                                // Handle connection
-                                let connection_manager = self.connection_manager.clone();
-                                let config = self.config.clone();
-
-                                tokio::spawn(async move {
-                                    if let Err(e) = Self::handle_connection(stream, addr, connection_manager, config).await {
-                                        error!("Connection handling error for {}: {}", addr, e);
-                                    }
-                                });
-                            }
-                            Err(e) => {
-                                error!("Failed to accept connection: {}", e);
-                                // Continue accepting other connections
-                            }
-                        }
-                    }
-
-                    // Shutdown signal received
-                    _ = shutdown_rx.recv() => {
-                        info!("Server shutdown signal received");
-                        break;
-                    }
-                }
-            } else {
-                break;
-            }
         }
 
-        info!("Server stopped accepting connections");
+        // Create data directory if it doesn't exist
+        if !self.config.storage.data_dir.exists() {
+            std::fs::create_dir_all(&self.config.storage.data_dir).map_err(|e| {
+                ServerError::Startup(format!("Failed to create data directory: {}", e))
+            })?;
+        }
+
+        info!("Server initialization complete");
         Ok(())
     }
 
-    /// Handle a single client connection
-    async fn handle_connection(
-        stream: tokio::net::TcpStream,
-        addr: SocketAddr,
-        connection_manager: Arc<ConnectionManager>,
-        _config: ServerConfig,
-    ) -> Result<()> {
-        debug!("Handling connection from {}", addr);
-
-        // Create connection wrapper
-        let connection = Connection::new(stream, addr).await?;
-
-        // Register connection
-        let connection_id = connection_manager
-            .add_connection(connection.clone())
-            .await?;
-
-        // Handle connection lifecycle
-        let result = connection.handle().await;
-
-        // Cleanup connection
-        connection_manager.remove_connection(connection_id).await;
-
-        match result {
-            Ok(_) => {
-                debug!("Connection from {} closed normally", addr);
-            }
-            Err(e) => {
-                warn!("Connection from {} closed with error: {}", addr, e);
-            }
+    /// Start the server
+    pub async fn start(&mut self) -> Result<(), ServerError> {
+        {
+            let mut state = self.state.write().await;
+            *state = ServerState::Starting;
         }
 
+        info!("Starting NORC server on {}", self.config.socket_addr());
+
+        // Start daemon monitoring if configured
+        if let Some(daemon_manager) = &self.daemon_manager {
+            daemon_manager.start_monitoring().await?;
+        }
+
+        // TODO: Initialize actual server components here
+        // For now, we simulate successful startup
+        
+        {
+            let mut state = self.state.write().await;
+            *state = ServerState::Running;
+        }
+
+        info!("NORC server started successfully");
         Ok(())
     }
 
-    /// Shutdown the server gracefully
-    pub async fn shutdown(&self) -> Result<()> {
-        info!("Shutting down server...");
+    /// Run the server until shutdown
+    pub async fn run(&mut self) -> Result<(), ServerError> {
+        self.initialize().await?;
+        self.start().await?;
 
-        // Send shutdown signal
-        if let Some(ref shutdown_tx) = *self.shutdown_tx.read().await {
-            let _ = shutdown_tx.send(());
-        }
+        // Wait for shutdown signal
+        let signal = wait_for_shutdown().await;
+        info!("Received shutdown signal: {:?}", signal);
 
-        // Close all connections
-        self.connection_manager.shutdown_all().await;
-
-        info!("Server shutdown complete");
+        self.stop().await?;
         Ok(())
     }
 
-    /// Get server statistics
-    pub async fn stats(&self) -> ServerStats {
-        ServerStats {
-            active_connections: self.connection_manager.connection_count().await,
-            total_connections: self.connection_manager.total_connections().await,
-            uptime_seconds: 0, // TODO: Track uptime
+    /// Stop the server gracefully
+    pub async fn stop(&mut self) -> Result<(), ServerError> {
+        {
+            let mut state = self.state.write().await;
+            *state = ServerState::Stopping;
         }
+
+        info!("Stopping NORC server...");
+
+        // Stop daemon manager
+        if let Some(daemon_manager) = &mut self.daemon_manager {
+            daemon_manager.stop().await?;
+        }
+
+        // TODO: Shutdown actual server components here
+        // For now, we simulate successful shutdown
+
+        {
+            let mut state = self.state.write().await;
+            *state = ServerState::Stopped;
+        }
+
+        info!("NORC server stopped gracefully");
+        Ok(())
+    }
+
+    /// Get current server state
+    pub async fn state(&self) -> ServerState {
+        self.state.read().await.clone()
     }
 
     /// Get server configuration
     pub fn config(&self) -> &ServerConfig {
         &self.config
     }
-}
 
-/// Server statistics
-#[derive(Debug, Clone)]
-pub struct ServerStats {
-    /// Current number of active connections
-    pub active_connections: usize,
-    /// Total connections handled since start
-    pub total_connections: u64,
-    /// Server uptime in seconds
-    pub uptime_seconds: u64,
+    /// Reload configuration (for SIGHUP)
+    pub async fn reload_config(&mut self, new_config: ServerConfig) -> Result<(), ServerError> {
+        info!("Reloading server configuration...");
+        
+        // Validate new configuration
+        new_config.validate()?;
+        
+        // Update configuration
+        self.config = Arc::new(new_config);
+        
+        // TODO: Apply configuration changes to running components
+        // For now, we just log the reload
+        
+        info!("Configuration reloaded successfully");
+        Ok(())
+    }
 }

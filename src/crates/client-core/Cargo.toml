@@ -6,30 +6,10 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "Core client functionality for NORC"
-keywords = ["client", "core"]
-
-[lints]
-workspace = true
-
-[lib]
-name = "norc_client_core"
-crate-type = ["lib"]
+description = "NORC Client Core - Core client functionality"
+keywords = ["client", "chat"]
 
 [dependencies]
-# Workspace crates
-norc-protocol = { path = "../protocol" }
-norc-transport = { path = "../transport" }
-
-# Async runtime
-tokio = { workspace = true }
-
-# Logging
-tracing = { workspace = true }
-
-# Error handling
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-
-[dev-dependencies]
-tokio-test = { workspace = true }
+# Placeholder dependencies
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }

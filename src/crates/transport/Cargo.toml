@@ -6,38 +6,10 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "Network transport layer for NORC"
+description = "Transport layer for NORC protocol"
 keywords = ["transport", "network"]
 
-[lints]
-workspace = true
-
-[lib]
-name = "norc_transport"
-crate-type = ["lib"]
-
 [dependencies]
-# Workspace crates
-norc-protocol = { path = "../protocol" }
-
-# Async runtime
-tokio = { workspace = true }
-
-# Network and TLS
-rustls = { workspace = true }
-tokio-rustls = { workspace = true }
-webpki-roots = { workspace = true }
-
-# Logging
-tracing = { workspace = true }
-
-# Error handling
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-
-# Utilities
-bytes = { workspace = true }
-futures = { workspace = true }
-
-[dev-dependencies]
-tokio-test = { workspace = true }
+# Placeholder dependencies
+tokio = { version = "1.40", features = ["net", "io-util"] }
+serde = { version = "1.0", features = ["derive"] }
