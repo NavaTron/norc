@@ -26,7 +26,11 @@ pub use rotation_manager::{
 };
 pub use tcp::TcpListener;
 pub use tls::{TlsClientTransport, TlsServerTransport};
-pub use tls_config::{create_client_config, create_server_config, TlsConfigError};
+pub use tls_config::{
+    compute_certificate_fingerprint, create_client_config, create_server_config,
+    extract_organization_id, load_certs, load_private_key, verify_certificate_pin,
+    TlsConfigError,
+};
 pub use websocket::WebSocketTransport;
 
 use async_trait::async_trait;

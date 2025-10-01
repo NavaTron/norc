@@ -63,8 +63,8 @@ pub fn load_private_key(path: &Path) -> Result<PrivateKeyDer<'static>, TlsConfig
 }
 
 /// Extract organization ID from X.509 certificate
-pub fn extract_organization_id(cert_der: &[u8]) -> Result<String, TlsConfigError> {
-    let (_, parsed_cert) = X509Certificate::from_der(cert_der)
+pub fn extract_organization_id(cert: &CertificateDer) -> Result<String, TlsConfigError> {
+    let (_, parsed_cert) = X509Certificate::from_der(cert.as_ref())
         .map_err(|e| TlsConfigError::InvalidCertificate(format!("Failed to parse certificate: {}", e)))?;
 
     // Extract organization from subject
@@ -88,29 +88,33 @@ pub fn extract_organization_id(cert_der: &[u8]) -> Result<String, TlsConfigError
 }
 
 /// Compute SHA-256 fingerprint of a certificate
-pub fn compute_certificate_fingerprint(cert: &CertificateDer) -> Vec<u8> {
+pub fn compute_certificate_fingerprint(cert: &CertificateDer) -> Result<Vec<u8>, TlsConfigError> {
     let mut hasher = Sha256::new();
     hasher.update(cert.as_ref());
-    hasher.finalize().to_vec()
+    Ok(hasher.finalize().to_vec())
 }
 
 /// Verify certificate fingerprint against pins
-pub fn verify_certificate_pin(cert: &CertificateDer, pinned_fingerprints: &[Vec<u8>]) -> bool {
+pub fn verify_certificate_pin(cert: &CertificateDer, pinned_fingerprints: &[Vec<u8>]) -> Result<(), TlsConfigError> {
     if pinned_fingerprints.is_empty() {
-        return true; // No pinning configured
+        return Err(TlsConfigError::Configuration(
+            "No certificate pins configured".to_string(),
+        ));
     }
 
-    let fingerprint = compute_certificate_fingerprint(cert);
+    let fingerprint = compute_certificate_fingerprint(cert)?;
 
     for pin in pinned_fingerprints {
         if pin.as_slice() == fingerprint.as_slice() {
             debug!("Certificate fingerprint matched pin");
-            return true;
+            return Ok(());
         }
     }
 
     error!("Certificate fingerprint does not match any pins");
-    false
+    Err(TlsConfigError::InvalidCertificate(
+        "Certificate fingerprint does not match any configured pins".to_string(),
+    ))
 }
 
 /// Create a server TLS configuration with optional mutual TLS

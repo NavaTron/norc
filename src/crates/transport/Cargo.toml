@@ -51,6 +51,15 @@ anyhow = "1.0"
 # Tracing
 tracing = "0.1"
 
+# Utilities
+hex = "0.4"  # Hex encoding for fingerprints
+
+[dev-dependencies]
+# Testing utilities
+tempfile = "3.12"
+rcgen = "0.13"  # Certificate generation for tests
+time = "0.3"    # Time handling for certificate validity
+
 [features]
 default = ["tls", "websocket"]
 tls = []
