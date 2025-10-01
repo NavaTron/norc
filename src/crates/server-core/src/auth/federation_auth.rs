@@ -2,11 +2,16 @@
 //!
 //! Implements T-S-F-04.02.01.02: Certificate-based federation authentication
 //! Implements T-S-F-03.01.02.01: Mutual TLS for federation connections
+//! Implements T-S-F-03.01.02.02: Certificate chain and revocation validation
+//! Implements T-S-F-03.01.02.03: Certificate pinning
 
 use crate::ServerError;
+use norc_config::CertificatePinningConfig;
 use norc_persistence::repositories::FederationRepository;
+use norc_transport::{RevocationChecker, RevocationStatus};
+use rustls::pki_types::CertificateDer;
 use std::sync::Arc;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use x509_parser::prelude::*;
 
 /// Federation credentials for authentication
@@ -71,6 +76,12 @@ pub struct FederationAuthenticator {
     trusted_cas: Vec<Vec<u8>>,
     /// Enable strict certificate validation
     strict_validation: bool,
+    /// Certificate revocation checker
+    revocation_checker: Option<Arc<RevocationChecker>>,
+    /// Certificate pinning configuration
+    pinning_config: Option<CertificatePinningConfig>,
+    /// Pinned certificate fingerprints (SHA-256)
+    pinned_fingerprints: Vec<Vec<u8>>,
 }
 
 impl FederationAuthenticator {
@@ -84,7 +95,30 @@ impl FederationAuthenticator {
             federation_repo,
             trusted_cas,
             strict_validation,
+            revocation_checker: None,
+            pinning_config: None,
+            pinned_fingerprints: Vec::new(),
         }
+    }
+
+    /// Create a new federation authenticator with revocation checking
+    pub fn with_revocation_checker(
+        mut self,
+        checker: Arc<RevocationChecker>,
+    ) -> Self {
+        self.revocation_checker = Some(checker);
+        self
+    }
+
+    /// Configure certificate pinning
+    pub fn with_pinning(
+        mut self,
+        pinning_config: CertificatePinningConfig,
+        pinned_fingerprints: Vec<Vec<u8>>,
+    ) -> Self {
+        self.pinning_config = Some(pinning_config);
+        self.pinned_fingerprints = pinned_fingerprints;
+        self
     }
 
     /// Authenticate a federation partner using mutual TLS
@@ -97,13 +131,25 @@ impl FederationAuthenticator {
             credentials.organization_id
         );
 
-        // Step 1: Validate certificate chain
+        // Step 1: Check certificate pinning if enabled
+        if let Some(ref pinning_config) = self.pinning_config {
+            if pinning_config.enabled {
+                self.verify_certificate_pinning(&credentials.certificate_chain[0])?;
+            }
+        }
+
+        // Step 2: Validate certificate chain
         self.validate_certificate_chain(&credentials.certificate_chain)?;
 
-        // Step 2: Extract organization ID from certificate
-        let cert_org_id = self.extract_organization_id(&credentials.certificate_chain[0])?;
+        // Step 3: Extract organization ID from certificate using utility
+        let cert_org_id = norc_transport::tls_config::extract_organization_id(
+            &credentials.certificate_chain[0]
+        ).map_err(|e| {
+            error!("Failed to extract organization ID: {}", e);
+            ServerError::Unauthorized("Invalid certificate: no organization ID".to_string())
+        })?;
 
-        // Step 3: Verify organization ID matches
+        // Step 4: Verify organization ID matches
         if cert_org_id != credentials.organization_id {
             warn!(
                 "Organization ID mismatch: cert={}, claimed={}",
@@ -113,6 +159,11 @@ impl FederationAuthenticator {
                 "Organization ID mismatch".to_string(),
             ));
         }
+
+        info!(
+            "Certificate organization ID validated: {}",
+            cert_org_id
+        );
 
                 // Step 1: Look up federation trust
         let trust = self
@@ -150,9 +201,9 @@ impl FederationAuthenticator {
             ));
         }
 
-        // Step 7: Check certificate revocation (OCSP/CRL)
-        if self.strict_validation {
-            self.check_revocation(&credentials.certificate_chain).await?;
+        // Step 7: Check certificate revocation (OCSP/CRL) using RevocationChecker
+        if self.strict_validation && self.revocation_checker.is_some() {
+            self.check_revocation_with_checker(&credentials.certificate_chain).await?;
         }
 
         info!(
@@ -252,51 +303,94 @@ impl FederationAuthenticator {
         }
     }
 
-    /// Extract organization ID from certificate
-    fn extract_organization_id(&self, cert_der: &[u8]) -> Result<String, ServerError> {
-        let (_, cert) = X509Certificate::from_der(cert_der).map_err(|e| {
-            ServerError::CryptoError(format!("Failed to parse certificate: {}", e))
-        })?;
 
-        // Try to get organization from subject
-        for attr in cert.subject().iter_organization() {
-            if let Ok(org) = attr.as_str() {
-                return Ok(org.to_string());
-            }
+
+    /// Verify certificate pinning
+    fn verify_certificate_pinning(&self, cert_der: &[u8]) -> Result<(), ServerError> {
+        if self.pinned_fingerprints.is_empty() {
+            // No pins configured, skip verification
+            return Ok(());
         }
 
-        // Try to get from subject alternative names
-        match cert.get_extension_unique(&oid_registry::OID_X509_EXT_SUBJECT_ALT_NAME) {
-            Ok(Some(_san_ext)) => {
-                // Parse SAN extension for organization ID
-                // This is a simplified implementation
-                // Full implementation would parse SAN and extract org ID
-            }
-            Ok(None) | Err(_) => {
-                // No SAN extension or error parsing it
+        // Convert to CertificateDer for fingerprint computation
+        let cert = CertificateDer::from(cert_der.to_vec());
+        
+        // Use transport utility to verify pin
+        if norc_transport::tls_config::verify_certificate_pin(&cert, &self.pinned_fingerprints) {
+            info!("Certificate pin verification successful");
+            Ok(())
+        } else {
+            let pinning_mode = self.pinning_config.as_ref()
+                .map(|c| c.mode.as_str())
+                .unwrap_or("strict");
+
+            if pinning_mode == "strict" {
+                error!("Certificate pin verification failed in strict mode");
+                Err(ServerError::Unauthorized(
+                    "Certificate does not match any pinned fingerprints".to_string(),
+                ))
+            } else {
+                warn!("Certificate pin verification failed in relaxed mode - allowing connection");
+                Ok(())
             }
         }
-
-        Err(ServerError::Unauthorized(
-            "No organization ID in certificate".to_string(),
-        ))
     }
 
-    /// Check certificate revocation status (OCSP/CRL)
-    async fn check_revocation(&self, _chain: &[Vec<u8>]) -> Result<(), ServerError> {
-        // TODO: Implement OCSP checking (T-S-F-03.01.02.02)
-        // This is a placeholder for the full implementation
-        
-        // Steps for full implementation:
-        // 1. Extract OCSP responder URL from certificate
-        // 2. Build OCSP request
-        // 3. Send request to OCSP responder
-        // 4. Validate OCSP response signature
-        // 5. Check revocation status
-        // 6. If OCSP fails, fall back to CRL checking
-        
-        warn!("Certificate revocation checking not yet implemented (OCSP/CRL)");
-        Ok(())
+    /// Check certificate revocation using RevocationChecker
+    async fn check_revocation_with_checker(&self, chain: &[Vec<u8>]) -> Result<(), ServerError> {
+        let checker = self.revocation_checker.as_ref()
+            .ok_or_else(|| ServerError::Config(
+                norc_config::ConfigError::Validation("Revocation checker not configured".to_string())
+            ))?;
+
+        if chain.is_empty() {
+            return Err(ServerError::Unauthorized("Empty certificate chain".to_string()));
+        }
+
+        // Convert to CertificateDer
+        let cert = CertificateDer::from(chain[0].clone());
+        let issuer = if chain.len() > 1 {
+            Some(CertificateDer::from(chain[1].clone()))
+        } else {
+            None
+        };
+
+        info!("Checking certificate revocation status");
+
+        // Check revocation status
+        match checker.check_revocation(&cert, issuer.as_ref()).await {
+            Ok(RevocationStatus::Valid) => {
+                info!("Certificate revocation check passed: certificate is valid");
+                Ok(())
+            }
+            Ok(RevocationStatus::Revoked) => {
+                error!("Certificate has been revoked");
+                Err(ServerError::Unauthorized(
+                    "Certificate has been revoked".to_string(),
+                ))
+            }
+            Ok(RevocationStatus::Unknown) => {
+                warn!("Certificate revocation status unknown");
+                // Fail-open or fail-closed based on configuration
+                if self.strict_validation {
+                    Err(ServerError::Unauthorized(
+                        "Cannot verify certificate revocation status".to_string(),
+                    ))
+                } else {
+                    warn!("Allowing connection despite unknown revocation status");
+                    Ok(())
+                }
+            }
+            Err(e) => {
+                error!("Revocation check failed: {}", e);
+                if self.strict_validation {
+                    Err(ServerError::CryptoError(format!("Revocation check failed: {}", e)))
+                } else {
+                    warn!("Revocation check failed but continuing in non-strict mode");
+                    Ok(())
+                }
+            }
+        }
     }
 
     /// Add a trusted CA certificate
