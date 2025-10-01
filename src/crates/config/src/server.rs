@@ -82,6 +82,220 @@ pub struct SecurityConfig {
 
     /// Enable HSM integration
     pub enable_hsm: bool,
+
+    /// TLS/Certificate security settings
+    pub tls: TlsSecurityConfig,
+
+    /// Certificate revocation checking
+    pub revocation: RevocationCheckConfig,
+}
+
+/// TLS security configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TlsSecurityConfig {
+    /// Require mutual TLS for federation connections
+    pub require_mutual_tls: bool,
+
+    /// Trusted CA certificate paths for client/federation verification
+    pub trusted_ca_certs: Vec<PathBuf>,
+
+    /// Certificate pinning configuration
+    pub pinning: CertificatePinningConfig,
+
+    /// Minimum TLS version (1.2 or 1.3)
+    #[serde(default = "default_min_tls_version")]
+    pub min_tls_version: String,
+
+    /// Allowed cipher suites (empty = use secure defaults)
+    #[serde(default)]
+    pub allowed_cipher_suites: Vec<String>,
+
+    /// Enable session resumption
+    #[serde(default = "default_true")]
+    pub enable_session_resumption: bool,
+
+    /// Session ticket rotation interval in seconds
+    #[serde(default = "default_session_ticket_rotation")]
+    pub session_ticket_rotation_secs: u64,
+}
+
+/// Certificate pinning configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CertificatePinningConfig {
+    /// Enable certificate pinning
+    pub enabled: bool,
+
+    /// Pinning mode: "strict" or "relaxed"
+    /// - strict: Reject connections if pin doesn't match
+    /// - relaxed: Log warning but allow connection
+    #[serde(default = "default_pinning_mode")]
+    pub mode: String,
+
+    /// SHA-256 fingerprints of pinned certificates (hex-encoded)
+    /// Format: ["sha256:HEXSTRING", "sha256:HEXSTRING"]
+    pub pins: Vec<String>,
+
+    /// Pinned certificate file paths (alternative to fingerprints)
+    /// These will be loaded and fingerprinted automatically
+    #[serde(default)]
+    pub pin_cert_files: Vec<PathBuf>,
+
+    /// Include subjectPublicKeyInfo pins (HPKP-style)
+    #[serde(default)]
+    pub enable_spki_pins: bool,
+
+    /// SPKI pins (base64-encoded SHA-256 of SubjectPublicKeyInfo)
+    #[serde(default)]
+    pub spki_pins: Vec<String>,
+
+    /// Backup pins (for key rotation scenarios)
+    #[serde(default)]
+    pub backup_pins: Vec<String>,
+
+    /// Maximum pin age before requiring refresh (days, 0 = no limit)
+    #[serde(default)]
+    pub max_pin_age_days: u32,
+}
+
+/// Certificate revocation checking configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RevocationCheckConfig {
+    /// Enable OCSP checking
+    #[serde(default = "default_true")]
+    pub enable_ocsp: bool,
+
+    /// Enable CRL checking
+    #[serde(default = "default_true")]
+    pub enable_crl: bool,
+
+    /// OCSP/CRL request timeout in seconds
+    #[serde(default = "default_revocation_timeout")]
+    pub timeout_secs: u64,
+
+    /// Maximum CRL size in bytes (10 MB default)
+    #[serde(default = "default_max_crl_size")]
+    pub max_crl_size_bytes: usize,
+
+    /// Fail closed if revocation status cannot be determined
+    #[serde(default)]
+    pub fail_on_unknown: bool,
+
+    /// OCSP cache duration in seconds
+    #[serde(default = "default_ocsp_cache_duration")]
+    pub ocsp_cache_duration_secs: u64,
+
+    /// CRL cache duration in seconds
+    #[serde(default = "default_crl_cache_duration")]
+    pub crl_cache_duration_secs: u64,
+
+    /// OCSP stapling configuration
+    pub ocsp_stapling: OcspStaplingConfig,
+}
+
+/// OCSP stapling configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OcspStaplingConfig {
+    /// Enable OCSP stapling for server certificates
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// OCSP responder URL override (if not in certificate)
+    pub responder_url: Option<String>,
+
+    /// Refresh OCSP response before expiration (seconds)
+    #[serde(default = "default_ocsp_refresh_before")]
+    pub refresh_before_expiry_secs: u64,
+}
+
+// Default value functions
+fn default_min_tls_version() -> String {
+    "1.3".to_string()
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_session_ticket_rotation() -> u64 {
+    86400 // 24 hours
+}
+
+fn default_pinning_mode() -> String {
+    "strict".to_string()
+}
+
+fn default_revocation_timeout() -> u64 {
+    10 // 10 seconds
+}
+
+fn default_max_crl_size() -> usize {
+    10 * 1024 * 1024 // 10 MB
+}
+
+fn default_ocsp_cache_duration() -> u64 {
+    3600 // 1 hour
+}
+
+fn default_crl_cache_duration() -> u64 {
+    86400 // 24 hours
+}
+
+fn default_ocsp_refresh_before() -> u64 {
+    3600 // 1 hour before expiration
+}
+
+impl Default for TlsSecurityConfig {
+    fn default() -> Self {
+        Self {
+            require_mutual_tls: true,
+            trusted_ca_certs: Vec::new(),
+            pinning: CertificatePinningConfig::default(),
+            min_tls_version: "1.3".to_string(),
+            allowed_cipher_suites: Vec::new(),
+            enable_session_resumption: true,
+            session_ticket_rotation_secs: 86400,
+        }
+    }
+}
+
+impl Default for CertificatePinningConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            mode: "strict".to_string(),
+            pins: Vec::new(),
+            pin_cert_files: Vec::new(),
+            enable_spki_pins: false,
+            spki_pins: Vec::new(),
+            backup_pins: Vec::new(),
+            max_pin_age_days: 0,
+        }
+    }
+}
+
+impl Default for RevocationCheckConfig {
+    fn default() -> Self {
+        Self {
+            enable_ocsp: true,
+            enable_crl: true,
+            timeout_secs: 10,
+            max_crl_size_bytes: 10 * 1024 * 1024,
+            fail_on_unknown: false,
+            ocsp_cache_duration_secs: 3600,
+            crl_cache_duration_secs: 86400,
+            ocsp_stapling: OcspStaplingConfig::default(),
+        }
+    }
+}
+
+impl Default for OcspStaplingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            responder_url: None,
+            refresh_before_expiry_secs: 3600,
+        }
+    }
 }
 
 /// Observability configuration
@@ -238,6 +452,8 @@ impl Default for ServerConfig {
                 key_rotation_interval_secs: 3600,
                 strict_cert_validation: true,
                 enable_hsm: false,
+                tls: TlsSecurityConfig::default(),
+                revocation: RevocationCheckConfig::default(),
             },
             observability: ObservabilityConfig {
                 log_level: "info".to_string(),

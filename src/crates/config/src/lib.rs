@@ -5,9 +5,13 @@
 pub mod cli;
 pub mod error;
 pub mod loader;
+pub mod security;
 pub mod server;
 
 pub use cli::*;
 pub use error::ConfigError;
-pub use server::{ServerConfig, NetworkConfig, SecurityConfig, ObservabilityConfig, 
-                FederationConfig, ResourceLimits};
+pub use server::{
+    ServerConfig, NetworkConfig, SecurityConfig, ObservabilityConfig, 
+    FederationConfig, ResourceLimits, TlsSecurityConfig, CertificatePinningConfig,
+    RevocationCheckConfig, OcspStaplingConfig
+};
