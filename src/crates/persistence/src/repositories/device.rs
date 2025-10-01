@@ -82,7 +82,13 @@ impl DeviceRepository {
 
     /// Revoke device
     pub async fn revoke(&self, device_id: &str) -> Result<()> {
-        let result = sqlx::query("UPDATE devices SET status = 'revoked' WHERE id = ?")
+        self.update_status(device_id, "revoked").await
+    }
+
+    /// Update device status
+    pub async fn update_status(&self, device_id: &str, status: &str) -> Result<()> {
+        let result = sqlx::query("UPDATE devices SET status = ? WHERE id = ?")
+            .bind(status)
             .bind(device_id)
             .execute(&self.pool)
             .await?;

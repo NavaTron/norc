@@ -146,6 +146,48 @@ pub struct ServerHello {
     pub pq_public_key: Option<Vec<u8>>,
 }
 
+/// Authentication challenge request (client → server)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthChallengeRequest {
+    /// Device ID requesting authentication
+    pub device_id: DeviceId,
+    /// Device public key
+    pub public_key: PublicKey,
+}
+
+/// Authentication challenge response (server → client)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthChallenge {
+    /// Challenge nonce (32 bytes)
+    pub challenge: [u8; 32],
+    /// Challenge expiry timestamp (Unix milliseconds)
+    pub expires_at: u64,
+}
+
+/// Authentication response (client → server)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthResponse {
+    /// Device ID
+    pub device_id: DeviceId,
+    /// Challenge that was signed
+    pub challenge: [u8; 32],
+    /// Ed25519 signature over challenge
+    pub signature: Signature,
+}
+
+/// Authentication result (server → client)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthResult {
+    /// Authentication success
+    pub success: bool,
+    /// Session token (if successful)
+    pub session_token: Option<[u8; 32]>,
+    /// Error message (if failed)
+    pub error: Option<String>,
+    /// Session expiry (if successful)
+    pub expires_at: Option<u64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

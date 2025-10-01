@@ -11,12 +11,14 @@ pub mod federation_auth;
 pub mod session;
 pub mod rbac;
 pub mod rate_limit;
+pub mod protocol;
 
 pub use device_auth::{DeviceAuthenticator, DeviceCredentials};
 pub use federation_auth::{FederationAuthenticator, FederationCredentials};
 pub use session::{Session, SessionManager, SessionToken};
 pub use rbac::{Permission, Role, AccessControl};
 pub use rate_limit::{RateLimiter, RateLimitConfig};
+pub use protocol::AuthProtocolHandler;
 
 use crate::ServerError;
 use norc_protocol::types::DeviceId;
