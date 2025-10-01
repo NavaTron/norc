@@ -4,6 +4,7 @@
 //! and signal processing per SERVER_REQUIREMENTS.
 
 pub mod auth;
+pub mod authorization;
 pub mod connection;
 pub mod connection_handler;
 pub mod connection_pool;
@@ -42,7 +43,11 @@ pub use auth::{
     AuthContext, AuthResult, AuthenticationManager, DeviceAuthenticator, DeviceCredentials,
     FederationAuthenticator, FederationCredentials, Permission, Role, Session, SessionManager,
     SessionToken, AccessControl, RateLimiter as AuthRateLimiter, RateLimitConfig as AuthRateLimitConfig,
+    AuthProtocolHandler,
 };
+
+// Re-export authorization types
+pub use authorization::{AuthorizationMiddleware, AuthorizationResult, MessageRateLimiter};
 
 use norc_config::ServerConfig;
 use std::sync::Arc;

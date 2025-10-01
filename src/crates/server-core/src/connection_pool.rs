@@ -42,6 +42,15 @@ pub struct ConnectionInfo {
     
     /// Total bytes received
     pub bytes_received: u64,
+    
+    /// Authenticated user ID (if authenticated)
+    pub user_id: Option<String>,
+    
+    /// Device ID (if authenticated)
+    pub device_id: Option<String>,
+    
+    /// Session ID (if authenticated)
+    pub session_id: Option<String>,
 }
 
 /// Connection pool for managing concurrent client connections
@@ -106,6 +115,9 @@ impl ConnectionPool {
             messages_received: 0,
             bytes_sent: 0,
             bytes_received: 0,
+            user_id: None,
+            device_id: None,
+            session_id: None,
         };
         
         // Store connection
@@ -160,6 +172,81 @@ impl ConnectionPool {
             info.bytes_received += bytes;
             info.last_activity = Instant::now();
         }
+    }
+    
+    /// Set authentication info on a connection
+    pub async fn set_authentication(
+        &self,
+        id: ConnectionId,
+        user_id: String,
+        device_id: String,
+        session_id: String,
+    ) -> Result<(), ServerError> {
+        if let Some(info) = self.connections.write().await.get_mut(&id) {
+            info.user_id = Some(user_id.clone());
+            info.device_id = Some(device_id.clone());
+            info.session_id = Some(session_id);
+            info.last_activity = Instant::now();
+            
+            eprintln!(
+                "Connection {} authenticated: user={}, device={}",
+                id, user_id, device_id
+            );
+            
+            Ok(())
+        } else {
+            Err(ServerError::Internal(format!(
+                "Connection not found: {}",
+                id
+            )))
+        }
+    }
+    
+    /// Clear authentication info from a connection
+    pub async fn clear_authentication(&self, id: ConnectionId) {
+        if let Some(info) = self.connections.write().await.get_mut(&id) {
+            info.user_id = None;
+            info.device_id = None;
+            info.session_id = None;
+        }
+    }
+    
+    /// Get connections by user ID
+    pub async fn get_by_user(&self, user_id: &str) -> Vec<ConnectionInfo> {
+        self.connections
+            .read()
+            .await
+            .values()
+            .filter(|info| {
+                info.user_id.as_ref().map(|uid| uid == user_id).unwrap_or(false)
+            })
+            .cloned()
+            .collect()
+    }
+    
+    /// Get connections by device ID
+    pub async fn get_by_device(&self, device_id: &str) -> Vec<ConnectionInfo> {
+        self.connections
+            .read()
+            .await
+            .values()
+            .filter(|info| {
+                info.device_id.as_ref().map(|did| did == device_id).unwrap_or(false)
+            })
+            .cloned()
+            .collect()
+    }
+    
+    /// Get connection by session ID
+    pub async fn get_by_session(&self, session_id: &str) -> Option<ConnectionInfo> {
+        self.connections
+            .read()
+            .await
+            .values()
+            .find(|info| {
+                info.session_id.as_ref().map(|sid| sid == session_id).unwrap_or(false)
+            })
+            .cloned()
     }
     
     /// Get connection info

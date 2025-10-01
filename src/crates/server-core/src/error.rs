@@ -57,7 +57,11 @@ pub enum ServerError {
     #[error("Prometheus error: {0}")]
     Prometheus(#[from] prometheus::Error),
 
-    /// Authentication/Authorization error
+    /// Authentication error
+    #[error("Authentication error: {0}")]
+    Authentication(String),
+
+    /// Authorization error
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
 

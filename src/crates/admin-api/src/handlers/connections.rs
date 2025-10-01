@@ -19,9 +19,6 @@ pub async fn list_connections(
     let filtered: Vec<ConnectionResponse> = connections
         .into_iter()
         .filter_map(|info| {
-            // TODO: Look up user_id and device_id from session repository
-            // For now, connections don't have user/device info until authentication is implemented
-            
             // Apply state filter (all connections are "active" for now)
             if let Some(ref state_filter) = params.state {
                 if state_filter != "active" {
@@ -30,16 +27,36 @@ pub async fn list_connections(
             }
             
             // Apply user_id filter
-            if params.user_id.is_some() {
-                // Skip since we don't have user_id mapped yet
-                return None;
+            if let Some(ref user_filter) = params.user_id {
+                if let Some(ref user_id) = info.user_id {
+                    if let Ok(uuid) = uuid::Uuid::parse_str(user_id) {
+                        if uuid != *user_filter {
+                            return None;
+                        }
+                    }
+                } else {
+                    return None;
+                }
             }
             
             // Apply device_id filter
-            if params.device_id.is_some() {
-                // Skip since we don't have device_id mapped yet
-                return None;
+            if let Some(ref device_filter) = params.device_id {
+                if let Some(ref device_id) = info.device_id {
+                    if let Ok(uuid) = uuid::Uuid::parse_str(device_id) {
+                        if uuid != *device_filter {
+                            return None;
+                        }
+                    }
+                } else {
+                    return None;
+                }
             }
+            
+            // Convert user_id and device_id strings to UUIDs
+            let user_id_uuid = info.user_id.as_ref()
+                .and_then(|id| uuid::Uuid::parse_str(id).ok());
+            let device_id_uuid = info.device_id.as_ref()
+                .and_then(|id| uuid::Uuid::parse_str(id).ok());
             
             // Calculate timestamps by going back from now
             let now = Utc::now();
@@ -48,8 +65,8 @@ pub async fn list_connections(
             
             Some(ConnectionResponse {
                 id: format!("conn-{}", info.id),
-                user_id: None, // TODO: Map from session
-                device_id: None, // TODO: Map from session
+                user_id: user_id_uuid,
+                device_id: device_id_uuid,
                 remote_address: info.remote_addr.to_string(),
                 state: "active".to_string(),
                 protocol: "tcp".to_string(), // TODO: Get actual protocol from connection
@@ -92,7 +109,11 @@ pub async fn get_connection(
         .await
         .ok_or_else(|| crate::ApiError::NotFound("Connection not found".to_string()))?;
     
-    // TODO: Look up user_id and device_id from session repository
+    // Convert user_id and device_id strings to UUIDs
+    let user_id_uuid = info.user_id.as_ref()
+        .and_then(|id| uuid::Uuid::parse_str(id).ok());
+    let device_id_uuid = info.device_id.as_ref()
+        .and_then(|id| uuid::Uuid::parse_str(id).ok());
     
     // Calculate timestamps by going back from now
     let now = Utc::now();
@@ -101,8 +122,8 @@ pub async fn get_connection(
     
     Ok(Json(ConnectionResponse {
         id: connection_id,
-        user_id: None,
-        device_id: None,
+        user_id: user_id_uuid,
+        device_id: device_id_uuid,
         remote_address: info.remote_addr.to_string(),
         state: "active".to_string(),
         protocol: "tcp".to_string(), // TODO: Get actual protocol
