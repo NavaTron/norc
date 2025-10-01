@@ -8,6 +8,7 @@
 pub mod error;
 pub mod listener;
 pub mod revocation;
+pub mod rotation_manager;
 pub mod tcp;
 pub mod tls;
 pub mod tls_config;
@@ -19,6 +20,10 @@ pub mod quic_transport;
 pub use error::{Result, TransportError};
 pub use listener::{ListenerConfig, NetworkListener};
 pub use revocation::{RevocationChecker, RevocationConfig, RevocationStatus, RevocationError};
+pub use rotation_manager::{
+    CertificateBundle, CertificateRotationManager, RotationConfig as CertRotationConfig,
+    RotationError, RotationManagerBuilder,
+};
 pub use tcp::TcpListener;
 pub use tls::{TlsClientTransport, TlsServerTransport};
 pub use tls_config::{create_client_config, create_server_config, TlsConfigError};
