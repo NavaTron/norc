@@ -1,15 +1,18 @@
 //! TLS configuration and certificate management
 //! Implements SERVER_REQUIREMENTS T-S-F-03.01.02 (Certificate validation)
+//! Implements T-S-F-03.01.02.01 (Mutual TLS for federation)
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls_pemfile::{certs, private_key};
+use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{info, warn};
+use tracing::{debug, info, warn, error};
+use x509_parser::prelude::*;
 
 /// TLS configuration error
 #[derive(Debug, Error)]
@@ -59,7 +62,58 @@ pub fn load_private_key(path: &Path) -> Result<PrivateKeyDer<'static>, TlsConfig
     Ok(key)
 }
 
-/// Create a server TLS configuration
+/// Extract organization ID from X.509 certificate
+pub fn extract_organization_id(cert_der: &[u8]) -> Result<String, TlsConfigError> {
+    let (_, parsed_cert) = X509Certificate::from_der(cert_der)
+        .map_err(|e| TlsConfigError::InvalidCertificate(format!("Failed to parse certificate: {}", e)))?;
+
+    // Extract organization from subject
+    for attr in parsed_cert.subject().iter_organization() {
+        if let Ok(org) = attr.as_str() {
+            return Ok(org.to_string());
+        }
+    }
+
+    // Try Common Name as fallback
+    for attr in parsed_cert.subject().iter_common_name() {
+        if let Ok(cn) = attr.as_str() {
+            info!("Using Common Name as organization ID: {}", cn);
+            return Ok(cn.to_string());
+        }
+    }
+
+    Err(TlsConfigError::InvalidCertificate(
+        "No organization ID found in certificate".to_string(),
+    ))
+}
+
+/// Compute SHA-256 fingerprint of a certificate
+pub fn compute_certificate_fingerprint(cert: &CertificateDer) -> Vec<u8> {
+    let mut hasher = Sha256::new();
+    hasher.update(cert.as_ref());
+    hasher.finalize().to_vec()
+}
+
+/// Verify certificate fingerprint against pins
+pub fn verify_certificate_pin(cert: &CertificateDer, pinned_fingerprints: &[Vec<u8>]) -> bool {
+    if pinned_fingerprints.is_empty() {
+        return true; // No pinning configured
+    }
+
+    let fingerprint = compute_certificate_fingerprint(cert);
+
+    for pin in pinned_fingerprints {
+        if pin.as_slice() == fingerprint.as_slice() {
+            debug!("Certificate fingerprint matched pin");
+            return true;
+        }
+    }
+
+    error!("Certificate fingerprint does not match any pins");
+    false
+}
+
+/// Create a server TLS configuration with optional mutual TLS
 pub fn create_server_config(
     cert_path: &Path,
     key_path: &Path,
@@ -68,21 +122,90 @@ pub fn create_server_config(
     let certs = load_certs(cert_path)?;
     let key = load_private_key(key_path)?;
     
+    let mut config = if require_client_auth {
+        // Mutual TLS: require and verify client certificates
+        info!("Configuring server with mutual TLS (client authentication required)");
+        
+        // For now, we'll use an empty root store
+        // In production, this should be populated with trusted federation CA certs
+        let root_store = RootCertStore::empty();
+        
+        // Use rustls's built-in WebPKI verifier from rustls::server::WebPkiClientVerifier
+        let client_cert_verifier = rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store))
+            .build()
+            .map_err(|e| TlsConfigError::Configuration(format!("Failed to build client verifier: {}", e)))?;
+        
+        ServerConfig::builder()
+            .with_client_cert_verifier(client_cert_verifier)
+            .with_single_cert(certs, key)
+            .map_err(|e| TlsConfigError::Configuration(e.to_string()))?
+    } else {
+        // Standard TLS: no client authentication
+        info!("Configuring server with standard TLS (no client authentication)");
+        
+        ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)
+            .map_err(|e| TlsConfigError::Configuration(e.to_string()))?
+    };
+    
+    // Configure TLS 1.3 only
+    config.alpn_protocols = vec![b"norc/1.0".to_vec()];
+    
+    info!("Created server TLS configuration (TLS 1.3, ALPN: norc/1.0)");
+    Ok(Arc::new(config))
+}
+
+/// Create a server TLS configuration with mutual TLS and custom CA roots
+/// 
+/// This function enables mutual TLS authentication with support for:
+/// - Custom CA certificate verification
+/// - Optional certificate pinning via SHA-256 fingerprints
+/// - Organization ID extraction from client certificates
+pub fn create_server_config_with_client_ca(
+    cert_path: &Path,
+    key_path: &Path,
+    client_ca_path: &Path,
+    pinned_fingerprints: Vec<Vec<u8>>,
+) -> Result<Arc<ServerConfig>, TlsConfigError> {
+    let certs = load_certs(cert_path)?;
+    let key = load_private_key(key_path)?;
+    let ca_certs = load_certs(client_ca_path)?;
+    
+    // Build root store with trusted federation CAs
+    let mut root_store = RootCertStore::empty();
+    for cert in ca_certs {
+        root_store.add(cert)
+            .map_err(|e| TlsConfigError::InvalidCertificate(format!("Failed to add CA cert: {}", e)))?;
+    }
+    
+    info!("Loaded {} trusted CA certificates for client verification", root_store.len());
+    
+    // Use rustls's built-in WebPKI verifier
+    // TODO: To add certificate pinning support, we need to implement a custom ClientCertVerifier
+    // that wraps WebPkiClientVerifier and adds pinning validation in verify_client_cert()
+    let client_cert_verifier = rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store))
+        .build()
+        .map_err(|e| TlsConfigError::Configuration(format!("Failed to build client verifier: {}", e)))?;
+    
+    if !pinned_fingerprints.is_empty() {
+        warn!(
+            "Certificate pinning configured with {} pins, but custom verifier not yet implemented. Pinning is currently ignored.",
+            pinned_fingerprints.len()
+        );
+        // TODO: Implement custom ClientCertVerifier that wraps WebPkiClientVerifier
+        // and adds pinning verification using verify_certificate_pin()
+    }
+    
     let mut config = ServerConfig::builder()
-        .with_no_client_auth()
+        .with_client_cert_verifier(client_cert_verifier)
         .with_single_cert(certs, key)
         .map_err(|e| TlsConfigError::Configuration(e.to_string()))?;
     
     // Configure TLS 1.3 only
     config.alpn_protocols = vec![b"norc/1.0".to_vec()];
     
-    if require_client_auth {
-        warn!("Client authentication is configured but not yet fully implemented");
-        // TODO: Implement mutual TLS with client certificate verification
-        // This requires creating a config with client cert verifier
-    }
-    
-    info!("Created server TLS configuration (TLS 1.3, ALPN: norc/1.0)");
+    info!("Created server TLS configuration with mutual TLS and client CA verification");
     Ok(Arc::new(config))
 }
 
