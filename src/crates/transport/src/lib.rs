@@ -6,6 +6,7 @@
 //! - QUIC (optional)
 
 pub mod error;
+pub mod health;
 pub mod listener;
 pub mod logging;
 pub mod metrics;
@@ -21,6 +22,10 @@ pub mod websocket;
 pub mod quic_transport;
 
 pub use error::{Result, TransportError};
+pub use health::{
+    CertificateHealth, HealthStatus, HealthSummary, RevocationServiceHealth,
+    RotationManagerHealth, SystemHealthReport,
+};
 pub use listener::{ListenerConfig, NetworkListener};
 pub use metrics::SecurityMetrics;
 pub use revocation::{RevocationChecker, RevocationConfig, RevocationStatus, RevocationError};
