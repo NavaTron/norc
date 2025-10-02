@@ -11,7 +11,7 @@ pub mod server;
 pub use cli::*;
 pub use error::ConfigError;
 pub use server::{
-    ServerConfig, NetworkConfig, SecurityConfig, ObservabilityConfig, 
-    FederationConfig, ResourceLimits, TlsSecurityConfig, CertificatePinningConfig,
-    RevocationCheckConfig, OcspStaplingConfig
+    CertificatePinningConfig, FederationConfig, NetworkConfig, ObservabilityConfig,
+    OcspStaplingConfig, ResourceLimits, RevocationCheckConfig, SecurityConfig, ServerConfig,
+    TlsSecurityConfig,
 };

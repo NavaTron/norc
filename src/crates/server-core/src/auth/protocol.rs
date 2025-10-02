@@ -54,16 +54,16 @@ impl AuthProtocolHandler {
     ) -> Result<AuthChallenge, ServerError> {
         // Generate challenge
         let challenge_vec = self.authenticator.generate_challenge(&request.device_id);
-        
+
         // Convert to fixed-size array
         let mut challenge = [0u8; 32];
         challenge.copy_from_slice(&challenge_vec[..32]);
-        
+
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
-        
+
         let expires_at = now + (CHALLENGE_LIFETIME_SECS * 1000);
 
         // Store pending challenge

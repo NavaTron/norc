@@ -33,18 +33,12 @@ impl TrustLevel {
 
     /// Check if this trust level requires post-quantum cryptography
     pub const fn requires_pq_crypto(&self) -> bool {
-        matches!(
-            self,
-            TrustLevel::Classified | TrustLevel::Nato
-        )
+        matches!(self, TrustLevel::Classified | TrustLevel::Nato)
     }
 
     /// Check if this trust level requires hardware security module (HSM)
     pub const fn requires_hsm(&self) -> bool {
-        matches!(
-            self,
-            TrustLevel::Classified | TrustLevel::Nato
-        )
+        matches!(self, TrustLevel::Classified | TrustLevel::Nato)
     }
 
     /// Get the audit log retention period in days
@@ -73,11 +67,7 @@ impl TrustLevel {
     /// Get the effective trust level for communication between two levels
     /// Returns the more restrictive (higher) trust level
     pub fn effective_level(&self, other: &TrustLevel) -> TrustLevel {
-        if *self > *other {
-            *self
-        } else {
-            *other
-        }
+        if *self > *other { *self } else { *other }
     }
 
     /// Parse a trust level from a string

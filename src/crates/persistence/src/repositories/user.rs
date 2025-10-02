@@ -70,17 +70,18 @@ impl UserRepository {
 
     /// Update user display name
     pub async fn update_display_name(&self, user_id: &str, display_name: &str) -> Result<()> {
-        let result = sqlx::query(
-            "UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?",
-        )
-        .bind(display_name)
-        .bind(Utc::now())
-        .bind(user_id)
-        .execute(&self.pool)
-        .await?;
+        let result = sqlx::query("UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?")
+            .bind(display_name)
+            .bind(Utc::now())
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() == 0 {
-            return Err(PersistenceError::NotFound(format!("User not found: {}", user_id)));
+            return Err(PersistenceError::NotFound(format!(
+                "User not found: {}",
+                user_id
+            )));
         }
 
         Ok(())
@@ -88,17 +89,18 @@ impl UserRepository {
 
     /// Update user status
     pub async fn update_status(&self, user_id: &str, status: &str) -> Result<()> {
-        let result = sqlx::query(
-            "UPDATE users SET status = ?, updated_at = ? WHERE id = ?",
-        )
-        .bind(status)
-        .bind(Utc::now())
-        .bind(user_id)
-        .execute(&self.pool)
-        .await?;
+        let result = sqlx::query("UPDATE users SET status = ?, updated_at = ? WHERE id = ?")
+            .bind(status)
+            .bind(Utc::now())
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() == 0 {
-            return Err(PersistenceError::NotFound(format!("User not found: {}", user_id)));
+            return Err(PersistenceError::NotFound(format!(
+                "User not found: {}",
+                user_id
+            )));
         }
 
         Ok(())

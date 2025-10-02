@@ -3,15 +3,15 @@
 //! Core server functionality and lifecycle management.
 
 use crate::{
-    handle_connection, ConnectionPool, DaemonManager,
-    MessageRouter, ServerError, ServerState, ObservabilitySystem,
+    ConnectionPool, DaemonManager, MessageRouter, ObservabilitySystem, ServerError, ServerState,
+    handle_connection,
 };
 use norc_config::ServerConfig;
 use norc_persistence::{
     Database,
     repositories::{
-        UserRepository, DeviceRepository, SessionRepository, MessageRepository,
-        FederationRepository, PresenceRepository, AuditRepository,
+        AuditRepository, DeviceRepository, FederationRepository, MessageRepository,
+        PresenceRepository, SessionRepository, UserRepository,
     },
 };
 use norc_transport::{ListenerConfig, NetworkListener};
@@ -29,7 +29,7 @@ pub struct ServerCore {
     router: Arc<MessageRouter>,
     listener_handle: Option<JoinHandle<()>>,
     observability: Option<Arc<ObservabilitySystem>>,
-    
+
     // Persistence layer
     database: Arc<Database>,
     user_repo: Arc<UserRepository>,
@@ -39,7 +39,8 @@ pub struct ServerCore {
     federation_repo: Arc<FederationRepository>,
     presence_repo: Arc<PresenceRepository>,
     audit_repo: Arc<AuditRepository>,
-}impl ServerCore {
+}
+impl ServerCore {
     /// Create a new server instance
     pub async fn new(config: ServerConfig) -> Result<Self, ServerError> {
         // Create async runtime
@@ -47,7 +48,10 @@ pub struct ServerCore {
             Ok(rt) => Arc::new(rt),
             Err(e) => {
                 error!("Failed to create async runtime: {}", e);
-                return Err(ServerError::Startup(format!("Failed to create runtime: {}", e)));
+                return Err(ServerError::Startup(format!(
+                    "Failed to create runtime: {}",
+                    e
+                )));
             }
         };
 
@@ -73,11 +77,11 @@ pub struct ServerCore {
         let database = Database::new(db_config)
             .await
             .map_err(|e| ServerError::Startup(format!("Failed to initialize database: {}", e)))?;
-        
+
         // Run migrations
-        database.migrate()
-            .await
-            .map_err(|e| ServerError::Startup(format!("Failed to run database migrations: {}", e)))?;
+        database.migrate().await.map_err(|e| {
+            ServerError::Startup(format!("Failed to run database migrations: {}", e))
+        })?;
 
         let database = Arc::new(database);
 
@@ -293,9 +297,9 @@ pub struct ServerCore {
         info!("Reloading configuration from disk");
 
         // Load configuration from file
-        let config_path = std::env::var("NORC_CONFIG")
-            .unwrap_or_else(|_| "/etc/norc/server.toml".to_string());
-        
+        let config_path =
+            std::env::var("NORC_CONFIG").unwrap_or_else(|_| "/etc/norc/server.toml".to_string());
+
         let new_config = ServerConfig::from_file(std::path::Path::new(&config_path))
             .map_err(|e| ServerError::Config(e))?;
 
@@ -312,7 +316,7 @@ pub struct ServerCore {
         // - Adjust connection pool sizes
         // - Update log levels
         // - Refresh TLS certificates (when supported)
-        
+
         info!("Configuration reloaded successfully");
         Ok(())
     }
@@ -320,20 +324,20 @@ pub struct ServerCore {
     /// Handle log rotation (SIGUSR1)
     async fn handle_log_rotation(&self) -> Result<(), ServerError> {
         info!("Initiating log rotation");
-        
+
         if let Some(observability) = &self.observability {
             observability.logger.rotate().await?;
         } else {
             warn!("Observability system not initialized - cannot rotate logs");
         }
-        
+
         info!("Log rotation completed");
         Ok(())
     }
 
     /// Stop the server gracefully
     pub async fn stop(&mut self) -> Result<(), ServerError> {
-        use tokio::time::{timeout, Duration};
+        use tokio::time::{Duration, timeout};
 
         {
             let mut state = self.state.write().await;
@@ -428,7 +432,10 @@ pub struct ServerCore {
         // Attempt to stop daemon manager quickly
         if let Some(daemon_manager) = &mut self.daemon_manager {
             if let Err(e) = daemon_manager.stop().await {
-                error!("Error stopping daemon manager during forced shutdown: {}", e);
+                error!(
+                    "Error stopping daemon manager during forced shutdown: {}",
+                    e
+                );
             }
         }
 
@@ -443,24 +450,27 @@ pub struct ServerCore {
     /// Preserve critical state during shutdown
     async fn preserve_shutdown_state(&self) -> Result<(), ServerError> {
         info!("Persisting active sessions and in-flight messages...");
-        
+
         // Get all active connection IDs
         let connection_ids = self.connection_pool.get_all_ids().await;
         let active_count = connection_ids.len();
-        
+
         if active_count > 0 {
-            info!("Found {} active connections to preserve state for", active_count);
-            
+            info!(
+                "Found {} active connections to preserve state for",
+                active_count
+            );
+
             // Update session last_active timestamps for all active connections
             // This allows clients to reconnect and resume their sessions
             // The session_repo and connection_pool will handle this through their existing APIs
-            
+
             // TODO: When ConnectionPool.get() and SessionRepository.find_by_id() are implemented:
             // 1. Iterate through connection_ids
             // 2. For each connection with a session_id, update session.last_active
             // 3. Persist any pending messages from the router
             // 4. Save connection metadata for crash recovery
-            
+
             warn!(
                 "State preservation partially implemented - {} active connections noted for future enhancement",
                 active_count
@@ -468,9 +478,9 @@ pub struct ServerCore {
         } else {
             info!("No active connections to preserve");
         }
-        
+
         info!("State preservation complete");
-        
+
         // Flush database writes to ensure persistence
         // SQLite with WAL mode handles this automatically
         if let Err(e) = self.database.pool().acquire().await {
@@ -478,7 +488,7 @@ pub struct ServerCore {
         } else {
             info!("Database state flushed successfully");
         }
-        
+
         Ok(())
     }
 

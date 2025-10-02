@@ -46,14 +46,12 @@ impl SessionRepository {
 
     /// Find session by token
     pub async fn find_by_token(&self, token: &str) -> Result<Session> {
-        sqlx::query_as::<_, Session>(
-            "SELECT * FROM sessions WHERE token = ? AND expires_at > ?",
-        )
-        .bind(token)
-        .bind(Utc::now())
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or_else(|| PersistenceError::NotFound("Session not found or expired".to_string()))
+        sqlx::query_as::<_, Session>("SELECT * FROM sessions WHERE token = ? AND expires_at > ?")
+            .bind(token)
+            .bind(Utc::now())
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or_else(|| PersistenceError::NotFound("Session not found or expired".to_string()))
     }
 
     /// Delete session
@@ -82,11 +80,14 @@ impl SessionRepository {
             .await?;
         Ok(result.rows_affected())
     }
-    
+
     /// List all active sessions with user and device details
-    pub async fn list_active(&self, limit: Option<usize>) -> Result<Vec<crate::models::SessionWithDetails>> {
+    pub async fn list_active(
+        &self,
+        limit: Option<usize>,
+    ) -> Result<Vec<crate::models::SessionWithDetails>> {
         let limit = limit.unwrap_or(100).min(1000); // Cap at 1000
-        
+
         let sessions = sqlx::query_as::<_, crate::models::SessionWithDetails>(
             r#"SELECT s.*, u.username, d.name as device_name
                FROM sessions s
@@ -94,20 +95,24 @@ impl SessionRepository {
                JOIN devices d ON s.device_id = d.id
                WHERE s.expires_at > ?
                ORDER BY s.created_at DESC
-               LIMIT ?"#
+               LIMIT ?"#,
         )
         .bind(Utc::now())
         .bind(limit as i64)
         .fetch_all(&self.pool)
         .await?;
-        
+
         Ok(sessions)
     }
-    
+
     /// List sessions by user ID with details
-    pub async fn list_by_user(&self, user_id: &str, limit: Option<usize>) -> Result<Vec<crate::models::SessionWithDetails>> {
+    pub async fn list_by_user(
+        &self,
+        user_id: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<crate::models::SessionWithDetails>> {
         let limit = limit.unwrap_or(100).min(1000);
-        
+
         let sessions = sqlx::query_as::<_, crate::models::SessionWithDetails>(
             r#"SELECT s.*, u.username, d.name as device_name
                FROM sessions s
@@ -115,21 +120,25 @@ impl SessionRepository {
                JOIN devices d ON s.device_id = d.id
                WHERE s.user_id = ? AND s.expires_at > ?
                ORDER BY s.created_at DESC
-               LIMIT ?"#
+               LIMIT ?"#,
         )
         .bind(user_id)
         .bind(Utc::now())
         .bind(limit as i64)
         .fetch_all(&self.pool)
         .await?;
-        
+
         Ok(sessions)
     }
-    
+
     /// List sessions by device ID with details
-    pub async fn list_by_device(&self, device_id: &str, limit: Option<usize>) -> Result<Vec<crate::models::SessionWithDetails>> {
+    pub async fn list_by_device(
+        &self,
+        device_id: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<crate::models::SessionWithDetails>> {
         let limit = limit.unwrap_or(100).min(1000);
-        
+
         let sessions = sqlx::query_as::<_, crate::models::SessionWithDetails>(
             r#"SELECT s.*, u.username, d.name as device_name
                FROM sessions s
@@ -137,17 +146,17 @@ impl SessionRepository {
                JOIN devices d ON s.device_id = d.id
                WHERE s.device_id = ? AND s.expires_at > ?
                ORDER BY s.created_at DESC
-               LIMIT ?"#
+               LIMIT ?"#,
         )
         .bind(device_id)
         .bind(Utc::now())
         .bind(limit as i64)
         .fetch_all(&self.pool)
         .await?;
-        
+
         Ok(sessions)
     }
-    
+
     /// Find session by ID with details
     pub async fn find_by_id(&self, session_id: &str) -> Result<crate::models::SessionWithDetails> {
         sqlx::query_as::<_, crate::models::SessionWithDetails>(
@@ -155,14 +164,14 @@ impl SessionRepository {
                FROM sessions s
                JOIN users u ON s.user_id = u.id
                JOIN devices d ON s.device_id = d.id
-               WHERE s.id = ?"#
+               WHERE s.id = ?"#,
         )
         .bind(session_id)
         .fetch_optional(&self.pool)
         .await?
         .ok_or_else(|| PersistenceError::NotFound("Session not found".to_string()))
     }
-    
+
     /// Delete all sessions for a user (for security response)
     pub async fn delete_by_user(&self, user_id: &str) -> Result<u64> {
         let result = sqlx::query("DELETE FROM sessions WHERE user_id = ?")

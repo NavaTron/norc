@@ -6,45 +6,45 @@
 use crate::error::ServerError;
 use norc_config::ObservabilityConfig;
 use prometheus::{
-    Encoder, Gauge, Histogram, HistogramOpts, HistogramVec, IntCounter,
-    IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
+    Encoder, Gauge, Histogram, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    Opts, Registry, TextEncoder,
 };
 use std::sync::Arc;
-use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 
 /// Metrics collector for NORC server
 #[derive(Clone)]
 pub struct Metrics {
     registry: Arc<Registry>,
-    
+
     // Connection metrics
     pub active_connections: IntGauge,
     pub total_connections: IntCounter,
     pub connection_duration: Histogram,
-    
+
     // Message metrics
     pub messages_received: IntCounterVec,
     pub messages_sent: IntCounterVec,
     pub message_size: HistogramVec,
     pub message_processing_duration: HistogramVec,
-    
+
     // Federation metrics
     pub federation_partners_connected: IntGauge,
     pub federation_messages_routed: IntCounterVec,
     pub federation_errors: IntCounterVec,
-    
+
     // Protocol metrics
     pub handshakes_completed: IntCounter,
     pub handshakes_failed: IntCounterVec,
     pub encryption_operations: IntCounterVec,
     pub signature_operations: IntCounterVec,
-    
+
     // System metrics
     pub memory_usage_bytes: IntGauge,
     pub cpu_usage_percent: Gauge,
     pub goroutines_count: IntGauge,
-    
+
     // Error metrics
     pub errors_total: IntCounterVec,
     pub panics_total: IntCounter,
@@ -61,44 +61,50 @@ impl Metrics {
             "Number of currently active client connections",
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
+
         let total_connections = IntCounter::new(
             "norc_total_connections",
             "Total number of client connections since startup",
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
+
         let connection_duration = Histogram::with_opts(
             HistogramOpts::new(
                 "norc_connection_duration_seconds",
                 "Duration of client connections in seconds",
             )
-            .buckets(vec![1.0, 5.0, 10.0, 30.0, 60.0, 300.0, 600.0, 1800.0, 3600.0]),
+            .buckets(vec![
+                1.0, 5.0, 10.0, 30.0, 60.0, 300.0, 600.0, 1800.0, 3600.0,
+            ]),
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
 
         // Message metrics
         let messages_received = IntCounterVec::new(
-            Opts::new("norc_messages_received_total", "Total number of messages received"),
+            Opts::new(
+                "norc_messages_received_total",
+                "Total number of messages received",
+            ),
             &["message_type"],
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
+
         let messages_sent = IntCounterVec::new(
             Opts::new("norc_messages_sent_total", "Total number of messages sent"),
             &["message_type"],
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
+
         let message_size = HistogramVec::new(
-            HistogramOpts::new("norc_message_size_bytes", "Size of messages in bytes")
-                .buckets(vec![
+            HistogramOpts::new("norc_message_size_bytes", "Size of messages in bytes").buckets(
+                vec![
                     100.0, 1024.0, 10240.0, 102400.0, 1048576.0, 10485760.0, 16777216.0,
-                ]),
+                ],
+            ),
             &["direction"],
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
+
         let message_processing_duration = HistogramVec::new(
             HistogramOpts::new(
                 "norc_message_processing_duration_seconds",
@@ -115,7 +121,7 @@ impl Metrics {
             "Number of federation partners currently connected",
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
+
         let federation_messages_routed = IntCounterVec::new(
             Opts::new(
                 "norc_federation_messages_routed_total",
@@ -124,7 +130,7 @@ impl Metrics {
             &["partner"],
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
+
         let federation_errors = IntCounterVec::new(
             Opts::new(
                 "norc_federation_errors_total",
@@ -140,13 +146,16 @@ impl Metrics {
             "Total number of successfully completed handshakes",
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
+
         let handshakes_failed = IntCounterVec::new(
-            Opts::new("norc_handshakes_failed_total", "Total number of failed handshakes"),
+            Opts::new(
+                "norc_handshakes_failed_total",
+                "Total number of failed handshakes",
+            ),
             &["reason"],
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
+
         let encryption_operations = IntCounterVec::new(
             Opts::new(
                 "norc_encryption_operations_total",
@@ -155,7 +164,7 @@ impl Metrics {
             &["operation"],
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
+
         let signature_operations = IntCounterVec::new(
             Opts::new(
                 "norc_signature_operations_total",
@@ -166,23 +175,17 @@ impl Metrics {
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
 
         // System metrics
-        let memory_usage_bytes = IntGauge::new(
-            "norc_memory_usage_bytes",
-            "Current memory usage in bytes",
-        )
-        .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
-        let cpu_usage_percent = Gauge::new(
-            "norc_cpu_usage_percent",
-            "Current CPU usage percentage",
-        )
-        .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
-        let goroutines_count = IntGauge::new(
-            "norc_goroutines_count",
-            "Number of active goroutines/tasks",
-        )
-        .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
+        let memory_usage_bytes =
+            IntGauge::new("norc_memory_usage_bytes", "Current memory usage in bytes")
+                .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
+
+        let cpu_usage_percent =
+            Gauge::new("norc_cpu_usage_percent", "Current CPU usage percentage")
+                .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
+
+        let goroutines_count =
+            IntGauge::new("norc_goroutines_count", "Number of active goroutines/tasks")
+                .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
 
         // Error metrics
         let errors_total = IntCounterVec::new(
@@ -190,12 +193,9 @@ impl Metrics {
             &["error_type", "component"],
         )
         .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
-        
-        let panics_total = IntCounter::new(
-            "norc_panics_total",
-            "Total number of panics recovered",
-        )
-        .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
+
+        let panics_total = IntCounter::new("norc_panics_total", "Total number of panics recovered")
+            .map_err(|e| ServerError::Internal(format!("Failed to create metric: {}", e)))?;
 
         // Register all metrics
         registry.register(Box::new(active_connections.clone()))?;
@@ -250,8 +250,9 @@ impl Metrics {
         encoder
             .encode(&metric_families, &mut buffer)
             .map_err(|e| ServerError::Internal(format!("Failed to encode metrics: {}", e)))?;
-        String::from_utf8(buffer)
-            .map_err(|e| ServerError::Internal(format!("Failed to convert metrics to string: {}", e)))
+        String::from_utf8(buffer).map_err(|e| {
+            ServerError::Internal(format!("Failed to convert metrics to string: {}", e))
+        })
     }
 
     /// Start metrics HTTP server
@@ -278,11 +279,11 @@ impl Metrics {
 
             tokio::spawn(async move {
                 let mut buffer = [0; 4096];
-                
+
                 // Read HTTP request (simplified - just look for GET /metrics)
                 if let Ok(n) = socket.read(&mut buffer).await {
                     let request = String::from_utf8_lossy(&buffer[..n]);
-                    
+
                     if request.contains("GET /metrics") {
                         // Generate metrics
                         match metrics.gather() {

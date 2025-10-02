@@ -74,7 +74,10 @@ impl DeviceRepository {
             .await?;
 
         if result.rows_affected() == 0 {
-            return Err(PersistenceError::NotFound(format!("Device not found: {}", device_id)));
+            return Err(PersistenceError::NotFound(format!(
+                "Device not found: {}",
+                device_id
+            )));
         }
 
         Ok(())
@@ -94,7 +97,10 @@ impl DeviceRepository {
             .await?;
 
         if result.rows_affected() == 0 {
-            return Err(PersistenceError::NotFound(format!("Device not found: {}", device_id)));
+            return Err(PersistenceError::NotFound(format!(
+                "Device not found: {}",
+                device_id
+            )));
         }
 
         Ok(())
@@ -108,12 +114,11 @@ impl DeviceRepository {
 
     /// Verify device is active
     pub async fn is_active(&self, device_id: &str) -> Result<bool> {
-        let count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM devices WHERE id = ? AND status = 'active'",
-        )
-        .bind(device_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM devices WHERE id = ? AND status = 'active'")
+                .bind(device_id)
+                .fetch_one(&self.pool)
+                .await?;
 
         Ok(count.0 > 0)
     }

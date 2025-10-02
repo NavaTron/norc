@@ -553,6 +553,9 @@ impl ServerConfig {
 
     /// Get socket address for federation connections
     pub fn federation_addr(&self) -> String {
-        format!("{}:{}", self.network.federation_address, self.network.federation_port)
+        format!(
+            "{}:{}",
+            self.network.federation_address, self.network.federation_port
+        )
     }
 }

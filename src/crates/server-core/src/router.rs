@@ -1,10 +1,10 @@
 //! Message router per SERVER_REQUIREMENTS F-03.04
 
-use norc_protocol::messages::EncryptedMessage;
 use norc_protocol::DeviceId;
+use norc_protocol::messages::EncryptedMessage;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tracing::{debug, info, warn};
 
 /// Message routing table entry
@@ -42,7 +42,7 @@ impl MessageRouter {
     /// Register a device route
     pub async fn register_device(&self, device_id: DeviceId, org_id: String, is_local: bool) {
         let mut table = self.routing_table.write().await;
-        
+
         let entry = RoutingEntry {
             device_id,
             org_id: org_id.clone(),
@@ -50,7 +50,10 @@ impl MessageRouter {
         };
 
         table.insert(device_id, entry);
-        info!("Registered device route: {:?} -> {} (local: {})", device_id, org_id, is_local);
+        info!(
+            "Registered device route: {:?} -> {} (local: {})",
+            device_id, org_id, is_local
+        );
     }
 
     /// Unregister a device route
@@ -66,10 +69,14 @@ impl MessageRouter {
         let table = self.routing_table.read().await;
 
         // Look up recipient routing
-        let _routing_entry = table.get(&message.recipient)
+        let _routing_entry = table
+            .get(&message.recipient)
             .ok_or_else(|| format!("No route to device: {:?}", message.recipient))?;
 
-        debug!("Routing message {:?} to {:?}", message.header.message_id, message.recipient);
+        debug!(
+            "Routing message {:?} to {:?}",
+            message.header.message_id, message.recipient
+        );
 
         // Queue message for delivery
         self.outbound_tx
@@ -103,7 +110,7 @@ impl MessageRouter {
     /// Get routing table statistics
     pub async fn get_stats(&self) -> RouterStats {
         let table = self.routing_table.read().await;
-        
+
         let total_routes = table.len();
         let local_routes = table.values().filter(|e| e.is_local).count();
         let federated_routes = table.values().filter(|e| !e.is_local).count();

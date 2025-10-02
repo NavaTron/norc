@@ -62,9 +62,9 @@ impl TrustLevel {
             "standard" => Ok(Self::Standard),
             "enhanced" => Ok(Self::Enhanced),
             "full" => Ok(Self::Full),
-            _ => Err(ServerError::Config(
-                norc_config::ConfigError::Validation(format!("Invalid trust level: {}", s))
-            )),
+            _ => Err(ServerError::Config(norc_config::ConfigError::Validation(
+                format!("Invalid trust level: {}", s),
+            ))),
         }
     }
 }
@@ -102,10 +102,7 @@ impl FederationAuthenticator {
     }
 
     /// Create a new federation authenticator with revocation checking
-    pub fn with_revocation_checker(
-        mut self,
-        checker: Arc<RevocationChecker>,
-    ) -> Self {
+    pub fn with_revocation_checker(mut self, checker: Arc<RevocationChecker>) -> Self {
         self.revocation_checker = Some(checker);
         self
     }
@@ -142,12 +139,12 @@ impl FederationAuthenticator {
         self.validate_certificate_chain(&credentials.certificate_chain)?;
 
         // Step 3: Extract organization ID from certificate using utility
-        let cert_org_id = norc_transport::tls_config::extract_organization_id(
-            &credentials.certificate_chain[0]
-        ).map_err(|e| {
-            error!("Failed to extract organization ID: {}", e);
-            ServerError::Unauthorized("Invalid certificate: no organization ID".to_string())
-        })?;
+        let cert_org_id =
+            norc_transport::tls_config::extract_organization_id(&credentials.certificate_chain[0])
+                .map_err(|e| {
+                    error!("Failed to extract organization ID: {}", e);
+                    ServerError::Unauthorized("Invalid certificate: no organization ID".to_string())
+                })?;
 
         // Step 4: Verify organization ID matches
         if cert_org_id != credentials.organization_id {
@@ -160,12 +157,9 @@ impl FederationAuthenticator {
             ));
         }
 
-        info!(
-            "Certificate organization ID validated: {}",
-            cert_org_id
-        );
+        info!("Certificate organization ID validated: {}", cert_org_id);
 
-                // Step 1: Look up federation trust
+        // Step 1: Look up federation trust
         let trust = self
             .federation_repo
             .find_by_organization(&credentials.organization_id)
@@ -203,7 +197,8 @@ impl FederationAuthenticator {
 
         // Step 7: Check certificate revocation (OCSP/CRL) using RevocationChecker
         if self.strict_validation && self.revocation_checker.is_some() {
-            self.check_revocation_with_checker(&credentials.certificate_chain).await?;
+            self.check_revocation_with_checker(&credentials.certificate_chain)
+                .await?;
         }
 
         info!(
@@ -239,13 +234,11 @@ impl FederationAuthenticator {
 
         // Step 1: Check certificate validity period
         let now = std::time::SystemTime::now();
-        let timestamp = now.duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64;
-        
+        let timestamp = now.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+
         let asn1_time = ASN1Time::from_timestamp(timestamp)
             .map_err(|e| ServerError::CryptoError(format!("Invalid timestamp: {}", e)))?;
-        
+
         if !leaf_cert.validity().is_valid_at(asn1_time) {
             warn!("Certificate is not valid at current time");
             return Err(ServerError::Unauthorized(
@@ -258,9 +251,7 @@ impl FederationAuthenticator {
             Ok(Some(key_usage)) => {
                 if !key_usage.value.digital_signature() {
                     warn!("Certificate does not have digital signature key usage");
-                    return Err(ServerError::Unauthorized(
-                        "Invalid key usage".to_string(),
-                    ));
+                    return Err(ServerError::Unauthorized("Invalid key usage".to_string()));
                 }
             }
             Ok(None) => {
@@ -283,7 +274,7 @@ impl FederationAuthenticator {
     fn verify_against_trusted_cas(&self, chain: &[Vec<u8>]) -> Result<(), ServerError> {
         // For now, just check that at least one CA in the chain matches a trusted CA
         // In a full implementation, this would perform complete chain validation
-        
+
         for cert_der in chain.iter().skip(1) {
             for trusted_ca_der in &self.trusted_cas {
                 if cert_der == trusted_ca_der {
@@ -303,8 +294,6 @@ impl FederationAuthenticator {
         }
     }
 
-
-
     /// Verify certificate pinning
     fn verify_certificate_pinning(&self, cert_der: &[u8]) -> Result<(), ServerError> {
         if self.pinned_fingerprints.is_empty() {
@@ -314,13 +303,15 @@ impl FederationAuthenticator {
 
         // Convert to CertificateDer for fingerprint computation
         let cert = CertificateDer::from(cert_der.to_vec());
-        
+
         // Use transport utility to verify pin
         if norc_transport::tls_config::verify_certificate_pin(&cert, &self.pinned_fingerprints) {
             info!("Certificate pin verification successful");
             Ok(())
         } else {
-            let pinning_mode = self.pinning_config.as_ref()
+            let pinning_mode = self
+                .pinning_config
+                .as_ref()
                 .map(|c| c.mode.as_str())
                 .unwrap_or("strict");
 
@@ -338,13 +329,16 @@ impl FederationAuthenticator {
 
     /// Check certificate revocation using RevocationChecker
     async fn check_revocation_with_checker(&self, chain: &[Vec<u8>]) -> Result<(), ServerError> {
-        let checker = self.revocation_checker.as_ref()
-            .ok_or_else(|| ServerError::Config(
-                norc_config::ConfigError::Validation("Revocation checker not configured".to_string())
-            ))?;
+        let checker = self.revocation_checker.as_ref().ok_or_else(|| {
+            ServerError::Config(norc_config::ConfigError::Validation(
+                "Revocation checker not configured".to_string(),
+            ))
+        })?;
 
         if chain.is_empty() {
-            return Err(ServerError::Unauthorized("Empty certificate chain".to_string()));
+            return Err(ServerError::Unauthorized(
+                "Empty certificate chain".to_string(),
+            ));
         }
 
         // Convert to CertificateDer
@@ -384,7 +378,10 @@ impl FederationAuthenticator {
             Err(e) => {
                 error!("Revocation check failed: {}", e);
                 if self.strict_validation {
-                    Err(ServerError::CryptoError(format!("Revocation check failed: {}", e)))
+                    Err(ServerError::CryptoError(format!(
+                        "Revocation check failed: {}",
+                        e
+                    )))
                 } else {
                     warn!("Revocation check failed but continuing in non-strict mode");
                     Ok(())
@@ -396,9 +393,8 @@ impl FederationAuthenticator {
     /// Add a trusted CA certificate
     pub fn add_trusted_ca(&mut self, ca_cert_der: Vec<u8>) -> Result<(), ServerError> {
         // Validate it's a valid certificate
-        let (_, _cert) = X509Certificate::from_der(&ca_cert_der).map_err(|e| {
-            ServerError::CryptoError(format!("Invalid CA certificate: {}", e))
-        })?;
+        let (_, _cert) = X509Certificate::from_der(&ca_cert_der)
+            .map_err(|e| ServerError::CryptoError(format!("Invalid CA certificate: {}", e)))?;
 
         self.trusted_cas.push(ca_cert_der);
         info!("Added trusted CA certificate");
@@ -413,7 +409,10 @@ mod tests {
     #[test]
     fn test_trust_level_parsing() {
         assert_eq!(TrustLevel::from_str("basic").unwrap(), TrustLevel::Basic);
-        assert_eq!(TrustLevel::from_str("STANDARD").unwrap(), TrustLevel::Standard);
+        assert_eq!(
+            TrustLevel::from_str("STANDARD").unwrap(),
+            TrustLevel::Standard
+        );
         assert!(TrustLevel::from_str("invalid").is_err());
     }
 }

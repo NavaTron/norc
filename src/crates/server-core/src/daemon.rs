@@ -74,16 +74,23 @@ impl DaemonManager {
 
                             // Check if we've exceeded max restarts
                             if count >= config.daemon.max_restarts {
-                                error!("Maximum restart attempts ({}) exceeded", config.daemon.max_restarts);
+                                error!(
+                                    "Maximum restart attempts ({}) exceeded",
+                                    config.daemon.max_restarts
+                                );
                                 false
                             } else if let Some(last_time) = last {
                                 // Check cooldown period
                                 let elapsed = last_time.elapsed();
-                                let cooldown = Duration::from_secs(config.daemon.restart_cooldown_secs);
-                                
+                                let cooldown =
+                                    Duration::from_secs(config.daemon.restart_cooldown_secs);
+
                                 if elapsed < cooldown {
                                     let remaining = cooldown - elapsed;
-                                    info!("Restart cooldown active, waiting {}s", remaining.as_secs());
+                                    info!(
+                                        "Restart cooldown active, waiting {}s",
+                                        remaining.as_secs()
+                                    );
                                     {
                                         let mut s = state.write().await;
                                         *s = DaemonState::RestartCooldown;
@@ -98,12 +105,12 @@ impl DaemonManager {
 
                         if can_restart {
                             info!("Attempting to restart daemon...");
-                            
+
                             {
                                 let mut count = restart_count.write().await;
                                 *count += 1;
                             }
-                            
+
                             {
                                 let mut last = last_restart.write().await;
                                 *last = Some(Instant::now());
@@ -117,12 +124,12 @@ impl DaemonManager {
                             // Simulate restart success for now
                             // TODO: Implement actual process restart logic
                             tokio::time::sleep(Duration::from_secs(2)).await;
-                            
+
                             {
                                 let mut s = state.write().await;
                                 *s = DaemonState::Running;
                             }
-                            
+
                             info!("Daemon restart successful");
                         } else {
                             break;
@@ -174,11 +181,11 @@ impl DaemonManager {
     async fn write_pid_file(&self) -> Result<(), std::io::Error> {
         let pid = std::process::id();
         let pid_content = pid.to_string();
-        
+
         if let Some(parent) = self.config.daemon.pid_file.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        
+
         std::fs::write(&self.config.daemon.pid_file, pid_content)?;
         info!("PID file written: {:?}", self.config.daemon.pid_file);
         Ok(())
@@ -201,13 +208,15 @@ impl DaemonManager {
 
         let pid_content = std::fs::read_to_string(&self.config.daemon.pid_file)
             .map_err(|e| ServerError::Io(e))?;
-        
-        let pid: u32 = pid_content.trim().parse()
+
+        let pid: u32 = pid_content
+            .trim()
+            .parse()
             .map_err(|_| ServerError::Daemon("Invalid PID in PID file".to_string()))?;
 
         // Check if process is still running
         let is_running = is_process_running(pid);
-        
+
         if !is_running {
             // Stale PID file, remove it
             let _ = std::fs::remove_file(&self.config.daemon.pid_file);
@@ -220,9 +229,9 @@ impl DaemonManager {
 /// Check if a process with the given PID is running
 #[cfg(unix)]
 fn is_process_running(pid: u32) -> bool {
-    use nix::sys::signal::{kill, Signal};
+    use nix::sys::signal::{Signal, kill};
     use nix::unistd::Pid;
-    
+
     match kill(Pid::from_raw(pid as i32), Signal::SIGCONT) {
         Ok(_) => true,
         Err(nix::errno::Errno::ESRCH) => false, // No such process
@@ -234,7 +243,7 @@ fn is_process_running(pid: u32) -> bool {
 fn is_process_running(pid: u32) -> bool {
     use windows::Win32::Foundation::{CloseHandle, HANDLE};
     use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_INFORMATION};
-    
+
     unsafe {
         let handle: HANDLE = OpenProcess(PROCESS_QUERY_INFORMATION, false, pid);
         if handle.is_invalid() {
@@ -249,7 +258,7 @@ fn is_process_running(pid: u32) -> bool {
 /// Daemonize the current process (Unix only)
 #[cfg(unix)]
 pub async fn daemonize(config: &ServerConfig) -> Result<(), ServerError> {
-    use nix::unistd::{fork, setsid, ForkResult};
+    use nix::unistd::{ForkResult, fork, setsid};
     use std::os::unix::io::AsRawFd;
 
     // First fork
@@ -285,8 +294,9 @@ pub async fn daemonize(config: &ServerConfig) -> Result<(), ServerError> {
 
     // Change working directory
     if let Some(working_dir) = &config.daemon.working_dir {
-        std::env::set_current_dir(working_dir)
-            .map_err(|e| ServerError::Daemon(format!("Failed to change working directory: {}", e)))?;
+        std::env::set_current_dir(working_dir).map_err(|e| {
+            ServerError::Daemon(format!("Failed to change working directory: {}", e))
+        })?;
     }
 
     // Redirect stdin, stdout, stderr to /dev/null
@@ -297,7 +307,7 @@ pub async fn daemonize(config: &ServerConfig) -> Result<(), ServerError> {
         .map_err(|e| ServerError::Daemon(format!("Failed to open /dev/null: {}", e)))?;
 
     let fd = dev_null.as_raw_fd();
-    
+
     unsafe {
         libc::dup2(fd, libc::STDIN_FILENO);
         libc::dup2(fd, libc::STDOUT_FILENO);

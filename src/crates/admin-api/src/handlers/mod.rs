@@ -1,25 +1,25 @@
 //! Request handlers for Admin API
 
-pub mod health;
-pub mod users;
-pub mod devices;
-pub mod config;
-pub mod monitoring;
-pub mod federation;
-pub mod audit;
 pub mod api_keys;
-pub mod connections;
-pub mod sessions;
+pub mod audit;
 pub mod certificates;
+pub mod config;
+pub mod connections;
+pub mod devices;
+pub mod federation;
+pub mod health;
+pub mod monitoring;
+pub mod sessions;
+pub mod users;
 
-pub use health::*;
-pub use users::*;
-pub use devices::*;
-pub use config::*;
-pub use monitoring::*;
-pub use federation::*;
-pub use audit::*;
 pub use api_keys::*;
-pub use connections::*;
-pub use sessions::*;
+pub use audit::*;
 pub use certificates::*;
+pub use config::*;
+pub use connections::*;
+pub use devices::*;
+pub use federation::*;
+pub use health::*;
+pub use monitoring::*;
+pub use sessions::*;
+pub use users::*;

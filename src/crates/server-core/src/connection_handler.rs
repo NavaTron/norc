@@ -2,9 +2,11 @@
 //! Implements SERVER_REQUIREMENTS F-03.02 and F-03.04
 
 use crate::{ConnectionId, ConnectionPool, MessageRouter, ServerError};
-use norc_persistence::repositories::{DeviceRepository, SessionRepository, PresenceRepository, MessageRepository, AuditRepository};
-use norc_protocol::messages::EncryptedMessage;
+use norc_persistence::repositories::{
+    AuditRepository, DeviceRepository, MessageRepository, PresenceRepository, SessionRepository,
+};
 use norc_protocol::DeviceId;
+use norc_protocol::messages::EncryptedMessage;
 use norc_transport::{TlsServerTransport, Transport};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -18,7 +20,7 @@ pub struct ConnectionHandler {
     transport: TlsServerTransport,
     router: Arc<MessageRouter>,
     pool: Arc<ConnectionPool>,
-    
+
     // Repositories (will be used when implementing message handling)
     _device_repo: Arc<DeviceRepository>,
     _session_repo: Arc<SessionRepository>,
@@ -58,7 +60,10 @@ impl ConnectionHandler {
 
     /// Handle the connection lifecycle
     pub async fn handle(mut self) -> Result<(), ServerError> {
-        info!("Handling connection {} from {}", self.connection_id, self.peer_addr);
+        info!(
+            "Handling connection {} from {}",
+            self.connection_id, self.peer_addr
+        );
 
         // Connection loop
         loop {
@@ -70,7 +75,10 @@ impl ConnectionHandler {
                     }
                 }
                 Err(e) => {
-                    error!("Error processing message on connection {}: {}", self.connection_id, e);
+                    error!(
+                        "Error processing message on connection {}: {}",
+                        self.connection_id, e
+                    );
                     break;
                 }
             }
@@ -78,7 +86,7 @@ impl ConnectionHandler {
 
         // Cleanup
         self.cleanup().await;
-        
+
         Ok(())
     }
 
@@ -100,15 +108,20 @@ impl ConnectionHandler {
             Ok(msg) => msg,
             Err(e) => {
                 error!("Failed to deserialize message: {}", e);
-                return Err(ServerError::Protocol(format!("Invalid message format: {}", e)));
+                return Err(ServerError::Protocol(format!(
+                    "Invalid message format: {}",
+                    e
+                )));
             }
         };
 
         // Extract device ID from message if not yet set
         if self.device_id.is_none() {
             self.device_id = Some(encrypted_msg.sender);
-            info!("Connection {} authenticated as device {:?}", 
-                  self.connection_id, encrypted_msg.sender);
+            info!(
+                "Connection {} authenticated as device {:?}",
+                self.connection_id, encrypted_msg.sender
+            );
         }
 
         // Route the message

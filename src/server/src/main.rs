@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use norc_config::{Cli, Commands, ServerConfig};
-use norc_server_core::{daemon::daemonize, init_logging, ServerCore};
+use norc_server_core::{ServerCore, daemon::daemonize, init_logging};
 use std::process;
 use tracing::{error, info, warn};
 
@@ -117,8 +117,8 @@ async fn generate_config_file(output_path: &std::path::Path, force: bool) -> Res
     }
 
     let default_config = ServerConfig::default();
-    let toml_content = toml::to_string(&default_config)
-        .context("Failed to serialize default config")?;
+    let toml_content =
+        toml::to_string(&default_config).context("Failed to serialize default config")?;
 
     if let Some(parent) = output_path.parent() {
         std::fs::create_dir_all(parent)
@@ -155,7 +155,9 @@ async fn handle_command(command: &Commands, config: &ServerConfig) -> Result<()>
             info!("Reloading server configuration...");
             reload_config(config).await
         }
-        Commands::ValidateConfig { config: config_path } => {
+        Commands::ValidateConfig {
+            config: config_path,
+        } => {
             info!("Validating configuration...");
             validate_config(config_path).await
         }
@@ -177,10 +179,7 @@ async fn start_server(config: &ServerConfig, force: bool) -> Result<()> {
         // This check will be done inside server.run()
     }
 
-    server
-        .run()
-        .await
-        .context("Failed to start server")?;
+    server.run().await.context("Failed to start server")?;
 
     Ok(())
 }
@@ -194,10 +193,12 @@ async fn stop_server(config: &ServerConfig, force: bool) -> Result<()> {
         return Ok(());
     }
 
-    let pid_content = fs::read_to_string(&config.daemon.pid_file)
-        .context("Failed to read PID file")?;
-    
-    let pid: u32 = pid_content.trim().parse()
+    let pid_content =
+        fs::read_to_string(&config.daemon.pid_file).context("Failed to read PID file")?;
+
+    let pid: u32 = pid_content
+        .trim()
+        .parse()
         .context("Invalid PID in PID file")?;
 
     if force {
@@ -234,10 +235,12 @@ async fn restart_server(config: &ServerConfig, force: bool) -> Result<()> {
 /// Check server status
 async fn check_status(config: &ServerConfig) -> Result<()> {
     if config.daemon.pid_file.exists() {
-        let pid_content = std::fs::read_to_string(&config.daemon.pid_file)
-            .context("Failed to read PID file")?;
-        
-        let pid: u32 = pid_content.trim().parse()
+        let pid_content =
+            std::fs::read_to_string(&config.daemon.pid_file).context("Failed to read PID file")?;
+
+        let pid: u32 = pid_content
+            .trim()
+            .parse()
             .context("Invalid PID in PID file")?;
 
         // TODO: Check if process is actually running
@@ -278,11 +281,8 @@ async fn run_server(config: ServerConfig) -> Result<()> {
     let mut server = ServerCore::new(config)
         .await
         .context("Failed to create server")?;
-    
-    server
-        .run()
-        .await
-        .context("Server execution failed")?;
+
+    server.run().await.context("Server execution failed")?;
 
     info!("Server shutdown complete");
     Ok(())

@@ -68,11 +68,7 @@ impl ProtocolVersion {
             *other
         } else {
             // Same major version, choose the minimum (most conservative)
-            if self < other {
-                *self
-            } else {
-                *other
-            }
+            if self < other { *self } else { *other }
         })
     }
 

@@ -1,0 +1,46 @@
+# clippy configuration
+# Documentation: https://doc.rust-lang.org/clippy/
+
+# Deny compiler warnings
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unused_imports = "warn"
+unused_variables = "warn"
+dead_code = "warn"
+
+# Clippy lints
+[lints.clippy]
+# Correctness - deny
+correctness = "deny"
+suspicious = "deny"
+
+# Complexity - warn
+complexity = "warn"
+cognitive_complexity = "warn"
+
+# Performance - warn
+perf = "warn"
+
+# Style - warn
+style = "warn"
+
+# Pedantic - allow with specific denies
+pedantic = "allow"
+must_use_candidate = "warn"
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+
+# Specific lints to deny
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "warn"
+unimplemented = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+
+# Cargo lints
+[lints.cargo]
+multiple_crate_versions = "warn"

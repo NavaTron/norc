@@ -28,7 +28,7 @@ pub struct ComponentHealthStatus {
 /// Individual component health
 #[derive(Debug, Serialize)]
 pub struct ComponentHealth {
-    pub status: String,      // "healthy", "degraded", "unhealthy"
+    pub status: String, // "healthy", "degraded", "unhealthy"
     pub message: Option<String>,
     pub last_check: DateTime<Utc>,
 }
@@ -50,14 +50,14 @@ pub struct VersionResponse {
 pub struct CreateUserRequest {
     #[validate(length(min = 3, max = 100))]
     pub username: String,
-    
+
     #[validate(email)]
     pub email: Option<String>,
-    
+
     pub display_name: Option<String>,
-    
+
     pub organization_id: String,
-    
+
     pub enabled: Option<bool>,
 }
 
@@ -66,12 +66,12 @@ pub struct CreateUserRequest {
 pub struct UpdateUserRequest {
     #[validate(length(min = 3, max = 100))]
     pub username: Option<String>,
-    
+
     #[validate(email)]
     pub email: Option<String>,
-    
+
     pub display_name: Option<String>,
-    
+
     pub enabled: Option<bool>,
 }
 
@@ -105,12 +105,12 @@ pub struct UserListResponse {
 #[derive(Debug, Deserialize, Validate)]
 pub struct RegisterDeviceRequest {
     pub user_id: Uuid,
-    
+
     #[validate(length(min = 1, max = 100))]
     pub device_name: String,
-    
+
     pub device_type: String,
-    
+
     pub public_key: String,
 }
 
@@ -239,12 +239,12 @@ pub struct SystemMetrics {
 pub struct CreateFederationPartnerRequest {
     #[validate(length(min = 1, max = 100))]
     pub organization_id: String,
-    
+
     #[validate(url)]
     pub address: String,
-    
+
     pub trust_level: String,
-    
+
     pub certificate: String,
 }
 
@@ -267,7 +267,7 @@ pub struct FederationPartnerResponse {
 /// Connection query parameters
 #[derive(Debug, Deserialize)]
 pub struct ConnectionQueryParams {
-    pub state: Option<String>,        // active, idle, closing
+    pub state: Option<String>, // active, idle, closing
     pub user_id: Option<Uuid>,
     pub device_id: Option<Uuid>,
     pub limit: Option<usize>,
@@ -281,7 +281,7 @@ pub struct ConnectionResponse {
     pub device_id: Option<Uuid>,
     pub remote_address: String,
     pub state: String,
-    pub protocol: String,             // websocket, tcp, quic
+    pub protocol: String, // websocket, tcp, quic
     pub connected_at: DateTime<Utc>,
     pub last_activity: DateTime<Utc>,
     pub bytes_sent: u64,
@@ -318,7 +318,7 @@ pub struct SessionResponse {
     pub device_id: Uuid,
     pub username: String,
     pub device_name: String,
-    pub state: String,                // active, suspended, expired
+    pub state: String, // active, suspended, expired
     pub created_at: DateTime<Utc>,
     pub last_active: DateTime<Utc>,
     pub expires_at: Option<DateTime<Utc>>,
@@ -377,11 +377,11 @@ pub struct AuditLogListResponse {
 pub struct CreateApiKeyRequest {
     #[validate(length(min = 1, max = 100))]
     pub name: String,
-    
+
     pub roles: Vec<Role>,
-    
+
     pub organization_id: Option<String>,
-    
+
     pub expires_in_days: Option<u64>,
 }
 
@@ -440,7 +440,7 @@ pub struct BulkOperationError {
 pub struct PaginationParams {
     #[serde(default = "default_page")]
     pub page: usize,
-    
+
     #[serde(default = "default_page_size")]
     pub page_size: usize,
 }

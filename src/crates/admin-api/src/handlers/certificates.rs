@@ -12,6 +12,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use chrono::{DateTime, Utc};
 use norc_transport::{
     CertificateHealth, HealthStatus, RevocationServiceHealth, RotationManagerHealth,
     SystemHealthReport,
@@ -19,7 +20,6 @@ use norc_transport::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::SystemTime;
-use chrono::{DateTime, Utc};
 
 /// Certificate management state
 #[derive(Clone)]
@@ -288,32 +288,33 @@ pub async fn list_certificates(
 ) -> ApiResult<Json<CertificateListResponse>> {
     // In a real implementation, this would query the certificate store
     // For now, return a mock response
-    
+
     let page = query.page.unwrap_or(1);
     let page_size = query.page_size.unwrap_or(20);
-    
+
     // Mock certificate data
-    let certificates = vec![
-        CertificateInfo {
-            cert_type: "server".to_string(),
-            subject: "CN=api.example.com,O=Example Corp".to_string(),
-            issuer: "CN=Example CA,O=Example Corp".to_string(),
-            serial_number: "1234567890abcdef".to_string(),
-            fingerprint: "SHA256:abcd1234...".to_string(),
-            not_before: Utc::now() - chrono::Duration::days(90),
-            not_after: Utc::now() + chrono::Duration::days(275),
-            days_until_expiry: 275,
-            is_valid: true,
-            is_expired: false,
-            is_expiring_soon: false,
-            key_algorithm: "RSA-2048".to_string(),
-            signature_algorithm: "SHA256-RSA".to_string(),
-            san: vec!["api.example.com".to_string(), "www.example.com".to_string()],
-            key_usage: vec!["Digital Signature".to_string(), "Key Encipherment".to_string()],
-            extended_key_usage: vec!["TLS Server Authentication".to_string()],
-        },
-    ];
-    
+    let certificates = vec![CertificateInfo {
+        cert_type: "server".to_string(),
+        subject: "CN=api.example.com,O=Example Corp".to_string(),
+        issuer: "CN=Example CA,O=Example Corp".to_string(),
+        serial_number: "1234567890abcdef".to_string(),
+        fingerprint: "SHA256:abcd1234...".to_string(),
+        not_before: Utc::now() - chrono::Duration::days(90),
+        not_after: Utc::now() + chrono::Duration::days(275),
+        days_until_expiry: 275,
+        is_valid: true,
+        is_expired: false,
+        is_expiring_soon: false,
+        key_algorithm: "RSA-2048".to_string(),
+        signature_algorithm: "SHA256-RSA".to_string(),
+        san: vec!["api.example.com".to_string(), "www.example.com".to_string()],
+        key_usage: vec![
+            "Digital Signature".to_string(),
+            "Key Encipherment".to_string(),
+        ],
+        extended_key_usage: vec!["TLS Server Authentication".to_string()],
+    }];
+
     Ok(Json(CertificateListResponse {
         total: certificates.len(),
         certificates,
@@ -331,11 +332,11 @@ pub async fn get_certificate(
 ) -> ApiResult<Json<CertificateInfo>> {
     // In a real implementation, this would look up the certificate
     // For now, return a mock response
-    
+
     if fingerprint.is_empty() {
         return Err(ApiError::NotFound("Certificate not found".to_string()));
     }
-    
+
     Ok(Json(CertificateInfo {
         cert_type: "server".to_string(),
         subject: "CN=api.example.com,O=Example Corp".to_string(),
@@ -369,27 +370,29 @@ pub async fn upload_certificate(
             "Invalid certificate type. Must be 'server', 'client', or 'ca'".to_string(),
         ));
     }
-    
+
     // Validate PEM format
     if !request.certificate_pem.contains("BEGIN CERTIFICATE") {
         return Err(ApiError::BadRequest(
             "Invalid certificate PEM format".to_string(),
         ));
     }
-    
+
     // For server/client certs, require private key
-    if ["server", "client"].contains(&request.cert_type.as_str()) && request.private_key_pem.is_none() {
+    if ["server", "client"].contains(&request.cert_type.as_str())
+        && request.private_key_pem.is_none()
+    {
         return Err(ApiError::BadRequest(
             "Private key required for server and client certificates".to_string(),
         ));
     }
-    
+
     // In a real implementation, this would:
     // 1. Parse and validate the certificate
     // 2. Verify the private key matches (if provided)
     // 3. Store in certificate manager
     // 4. Return certificate info
-    
+
     Ok((
         StatusCode::CREATED,
         Json(CertificateInfo {
@@ -426,27 +429,27 @@ pub async fn rotate_certificate(
             "Invalid certificate type for rotation. Must be 'server' or 'client'".to_string(),
         ));
     }
-    
+
     // Validate PEM formats
     if !request.new_certificate_pem.contains("BEGIN CERTIFICATE") {
         return Err(ApiError::BadRequest(
             "Invalid certificate PEM format".to_string(),
         ));
     }
-    
+
     if !request.new_private_key_pem.contains("BEGIN") {
         return Err(ApiError::BadRequest(
             "Invalid private key PEM format".to_string(),
         ));
     }
-    
+
     // In a real implementation, this would:
     // 1. Validate new certificate and key
     // 2. Verify key matches certificate
     // 3. Trigger rotation manager
     // 4. Notify subscribers
     // 5. Return rotation result
-    
+
     Ok(Json(RotationResponse {
         success: true,
         message: format!("{} certificate rotation completed", request.cert_type),
@@ -468,11 +471,11 @@ pub async fn delete_certificate(
     // 2. Check if it's safe to delete (not currently in use)
     // 3. Remove from certificate store
     // 4. Update any references
-    
+
     if fingerprint.is_empty() {
         return Err(ApiError::NotFound("Certificate not found".to_string()));
     }
-    
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -489,13 +492,13 @@ pub async fn check_revocation(
             "Invalid certificate PEM format".to_string(),
         ));
     }
-    
+
     // In a real implementation, this would:
     // 1. Parse certificate
     // 2. Extract OCSP/CRL URLs
     // 3. Perform revocation check
     // 4. Return status
-    
+
     Ok(Json(RevocationCheckResponse {
         status: "valid".to_string(),
         revocation_reason: None,
@@ -514,23 +517,21 @@ pub async fn get_certificate_health(
 ) -> ApiResult<Json<SystemCertificateHealthResponse>> {
     // In a real implementation, this would query the actual health system
     // For now, return mock data that demonstrates the structure
-    
+
     Ok(Json(SystemCertificateHealthResponse {
         status: "healthy".to_string(),
         timestamp: Utc::now(),
-        server_certificates: vec![
-            CertificateHealthResponse {
-                status: "healthy".to_string(),
-                cert_type: "server".to_string(),
-                subject: "CN=api.example.com".to_string(),
-                days_until_expiry: 275,
-                is_expired: false,
-                is_expiring_soon: false,
-                is_revoked: false,
-                last_revocation_check: Some(Utc::now() - chrono::Duration::hours(1)),
-                issues: vec![],
-            },
-        ],
+        server_certificates: vec![CertificateHealthResponse {
+            status: "healthy".to_string(),
+            cert_type: "server".to_string(),
+            subject: "CN=api.example.com".to_string(),
+            days_until_expiry: 275,
+            is_expired: false,
+            is_expiring_soon: false,
+            is_revoked: false,
+            last_revocation_check: Some(Utc::now() - chrono::Duration::hours(1)),
+            issues: vec![],
+        }],
         client_certificates: vec![],
         ca_certificates: vec![],
         rotation_manager: RotationManagerHealthResponse {
@@ -600,7 +601,7 @@ mod tests {
             key_usage: vec![],
             extended_key_usage: vec![],
         };
-        
+
         let json = serde_json::to_string(&info).unwrap();
         assert!(json.contains("server"));
     }
@@ -612,7 +613,7 @@ mod tests {
             "certificate_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
             "private_key_pem": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
         }"#;
-        
+
         let request: UploadCertificateRequest = serde_json::from_str(json).unwrap();
         assert_eq!(request.cert_type, "server");
     }
@@ -626,7 +627,7 @@ mod tests {
             previous_fingerprint: Some("old".to_string()),
             new_fingerprint: "new".to_string(),
         };
-        
+
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("success"));
         assert!(json.contains("true"));

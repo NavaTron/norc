@@ -1,0 +1,21 @@
+[package]
+name = "norc-benches"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bench]]
+name = "health_benchmarks"
+harness = false
+
+[[bench]]
+name = "certificate_benchmarks"
+harness = false
+
+[dependencies]
+norc-transport = { path = "../src/crates/transport" }
+norc-cli = { path = "../src/crates/cli" }
+criterion = { workspace = true }

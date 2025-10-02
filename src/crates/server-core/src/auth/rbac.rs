@@ -13,34 +13,34 @@ pub enum Permission {
     MessageSend,
     MessageReceive,
     MessageDelete,
-    
+
     // User management
     UserCreate,
     UserRead,
     UserUpdate,
     UserDelete,
-    
+
     // Device management
     DeviceRegister,
     DeviceRevoke,
     DeviceList,
-    
+
     // Federation management
     FederationCreate,
     FederationUpdate,
     FederationDelete,
     FederationList,
-    
+
     // Admin operations
     ConfigRead,
     ConfigWrite,
     ConfigReload,
-    
+
     // Monitoring
     MetricsRead,
     LogsRead,
     HealthCheck,
-    
+
     // System administration
     SystemShutdown,
     SystemRestart,
@@ -52,22 +52,22 @@ pub enum Permission {
 pub enum Role {
     /// Regular user - can send/receive messages
     User,
-    
+
     /// Device administrator - can manage devices
     DeviceAdmin,
-    
+
     /// Organization administrator - can manage users and devices
     OrgAdmin,
-    
+
     /// Federation administrator - can manage federation
     FederationAdmin,
-    
+
     /// System administrator - full access
     SystemAdmin,
-    
+
     /// Federation partner with trust level
     FederationPartner(super::federation_auth::TrustLevel),
-    
+
     /// Custom role with specific permissions
     Custom(String, Vec<Permission>),
 }
@@ -81,7 +81,7 @@ impl Role {
                 Permission::MessageReceive,
                 Permission::HealthCheck,
             ],
-            
+
             Role::DeviceAdmin => vec![
                 Permission::MessageSend,
                 Permission::MessageReceive,
@@ -90,7 +90,7 @@ impl Role {
                 Permission::DeviceList,
                 Permission::HealthCheck,
             ],
-            
+
             Role::OrgAdmin => vec![
                 Permission::MessageSend,
                 Permission::MessageReceive,
@@ -106,7 +106,7 @@ impl Role {
                 Permission::LogsRead,
                 Permission::HealthCheck,
             ],
-            
+
             Role::FederationAdmin => vec![
                 Permission::MessageSend,
                 Permission::MessageReceive,
@@ -118,7 +118,7 @@ impl Role {
                 Permission::MetricsRead,
                 Permission::HealthCheck,
             ],
-            
+
             Role::SystemAdmin => {
                 // System admins have all permissions
                 vec![
@@ -146,16 +146,13 @@ impl Role {
                     Permission::SystemRestart,
                     Permission::SystemBackup,
                 ]
-            },
-            
+            }
+
             Role::FederationPartner(trust_level) => {
                 use super::federation_auth::TrustLevel;
                 match trust_level {
                     TrustLevel::None => vec![],
-                    TrustLevel::Basic => vec![
-                        Permission::MessageSend,
-                        Permission::MessageReceive,
-                    ],
+                    TrustLevel::Basic => vec![Permission::MessageSend, Permission::MessageReceive],
                     TrustLevel::Standard => vec![
                         Permission::MessageSend,
                         Permission::MessageReceive,
@@ -178,8 +175,8 @@ impl Role {
                         Permission::LogsRead,
                     ],
                 }
-            },
-            
+            }
+
             Role::Custom(_, permissions) => permissions.clone(),
         }
     }
@@ -210,7 +207,11 @@ impl AccessControl {
     }
 
     /// Require a specific permission for a role
-    pub fn require_permission(&self, role: &Role, permission: &Permission) -> Result<(), ServerError> {
+    pub fn require_permission(
+        &self,
+        role: &Role,
+        permission: &Permission,
+    ) -> Result<(), ServerError> {
         if self.has_permission(role, permission) {
             Ok(())
         } else {
@@ -253,7 +254,7 @@ mod tests {
     fn test_user_role_permissions() {
         let role = Role::User;
         let permissions = role.permissions();
-        
+
         assert!(permissions.contains(&Permission::MessageSend));
         assert!(permissions.contains(&Permission::MessageReceive));
         assert!(!permissions.contains(&Permission::UserCreate));
@@ -263,7 +264,7 @@ mod tests {
     fn test_system_admin_permissions() {
         let role = Role::SystemAdmin;
         let permissions = role.permissions();
-        
+
         // System admin should have all permissions
         assert!(permissions.contains(&Permission::MessageSend));
         assert!(permissions.contains(&Permission::UserCreate));
@@ -274,12 +275,12 @@ mod tests {
     #[test]
     fn test_federation_partner_permissions() {
         use super::super::federation_auth::TrustLevel;
-        
+
         let basic_role = Role::FederationPartner(TrustLevel::Basic);
         let basic_perms = basic_role.permissions();
         assert!(basic_perms.contains(&Permission::MessageSend));
         assert!(!basic_perms.contains(&Permission::MetricsRead));
-        
+
         let enhanced_role = Role::FederationPartner(TrustLevel::Enhanced);
         let enhanced_perms = enhanced_role.permissions();
         assert!(enhanced_perms.contains(&Permission::MetricsRead));
@@ -288,23 +289,29 @@ mod tests {
     #[test]
     fn test_access_control() {
         let ac = AccessControl::new();
-        
+
         assert!(ac.has_permission(&Role::SystemAdmin, &Permission::ConfigWrite));
         assert!(!ac.has_permission(&Role::User, &Permission::ConfigWrite));
-        
-        assert!(ac.require_permission(&Role::SystemAdmin, &Permission::ConfigWrite).is_ok());
-        assert!(ac.require_permission(&Role::User, &Permission::ConfigWrite).is_err());
+
+        assert!(
+            ac.require_permission(&Role::SystemAdmin, &Permission::ConfigWrite)
+                .is_ok()
+        );
+        assert!(
+            ac.require_permission(&Role::User, &Permission::ConfigWrite)
+                .is_err()
+        );
     }
 
     #[test]
     fn test_custom_roles() {
         let mut ac = AccessControl::new();
-        
+
         ac.define_custom_role(
             "Moderator".to_string(),
             vec![Permission::MessageDelete, Permission::UserRead],
         );
-        
+
         let moderator = ac.get_custom_role("Moderator").unwrap();
         assert!(ac.has_permission(&moderator, &Permission::MessageDelete));
         assert!(!ac.has_permission(&moderator, &Permission::UserCreate));

@@ -82,11 +82,11 @@ pub fn validate_certificate(cert_path: &Path) -> Result<ValidationResult> {
     println!("{}", "Validating certificate...".cyan().bold());
     println!("File: {}", cert_path.display());
     println!();
-    
+
     // Read certificate file
     let cert_pem = fs::read_to_string(cert_path)
         .with_context(|| format!("Failed to read certificate file: {}", cert_path.display()))?;
-    
+
     // Check PEM format
     if !cert_pem.contains("BEGIN CERTIFICATE") {
         return Ok(ValidationResult {
@@ -96,14 +96,14 @@ pub fn validate_certificate(cert_path: &Path) -> Result<ValidationResult> {
             warnings: vec![],
         });
     }
-    
+
     // Parse certificate (mock implementation - real would use x509-parser)
     let cert_info = parse_certificate_info(&cert_pem)?;
-    
+
     // Perform validation checks
     let mut issues = Vec::new();
     let mut warnings = Vec::new();
-    
+
     // Check expiration
     if cert_info.is_expired {
         issues.push(format!(
@@ -116,7 +116,7 @@ pub fn validate_certificate(cert_path: &Path) -> Result<ValidationResult> {
             cert_info.days_until_expiry
         ));
     }
-    
+
     // Check key algorithm
     if cert_info.key_algorithm.contains("RSA-1024") || cert_info.key_algorithm.contains("MD5") {
         issues.push(format!(
@@ -124,9 +124,9 @@ pub fn validate_certificate(cert_path: &Path) -> Result<ValidationResult> {
             cert_info.key_algorithm
         ));
     }
-    
+
     let valid = issues.is_empty();
-    
+
     Ok(ValidationResult {
         valid,
         certificate_info: cert_info,
@@ -136,31 +136,36 @@ pub fn validate_certificate(cert_path: &Path) -> Result<ValidationResult> {
 }
 
 /// Validate a certificate chain
-pub fn validate_certificate_chain(cert_path: &Path, chain_path: Option<&Path>) -> Result<ValidationResult> {
+pub fn validate_certificate_chain(
+    cert_path: &Path,
+    chain_path: Option<&Path>,
+) -> Result<ValidationResult> {
     println!("{}", "Validating certificate chain...".cyan().bold());
     println!("Certificate: {}", cert_path.display());
     if let Some(chain) = chain_path {
         println!("Chain: {}", chain.display());
     }
     println!();
-    
+
     // Validate main certificate
     let mut result = validate_certificate(cert_path)?;
-    
+
     // If chain provided, validate it
     if let Some(chain) = chain_path {
         let chain_pem = fs::read_to_string(chain)
             .with_context(|| format!("Failed to read chain file: {}", chain.display()))?;
-        
+
         if !chain_pem.contains("BEGIN CERTIFICATE") {
             result.issues.push("Invalid chain PEM format".to_string());
             result.valid = false;
         }
-        
+
         // In real implementation, verify chain signatures
-        result.warnings.push("Chain validation not yet implemented".to_string());
+        result
+            .warnings
+            .push("Chain validation not yet implemented".to_string());
     }
-    
+
     Ok(result)
 }
 
@@ -170,7 +175,7 @@ pub fn print_validation_result(result: &ValidationResult) {
     println!("{}", "Certificate Validation Result".bold());
     println!("{}", "=".repeat(70));
     println!();
-    
+
     // Overall status
     if result.valid {
         println!("Status: {}", "✓ VALID".green().bold());
@@ -178,7 +183,7 @@ pub fn print_validation_result(result: &ValidationResult) {
         println!("Status: {}", "✗ INVALID".red().bold());
     }
     println!();
-    
+
     // Certificate details
     println!("{}", "Certificate Details:".bold());
     println!("  Subject:       {}", result.certificate_info.subject);
@@ -186,24 +191,40 @@ pub fn print_validation_result(result: &ValidationResult) {
     println!("  Serial:        {}", result.certificate_info.serial_number);
     println!("  Not Before:    {}", result.certificate_info.not_before);
     println!("  Not After:     {}", result.certificate_info.not_after);
-    println!("  Days to Expiry: {}", 
+    println!(
+        "  Days to Expiry: {}",
         if result.certificate_info.is_expired {
-            format!("{} (EXPIRED)", result.certificate_info.days_until_expiry).red().to_string()
+            format!("{} (EXPIRED)", result.certificate_info.days_until_expiry)
+                .red()
+                .to_string()
         } else if result.certificate_info.days_until_expiry < 30 {
-            format!("{}", result.certificate_info.days_until_expiry).yellow().to_string()
+            format!("{}", result.certificate_info.days_until_expiry)
+                .yellow()
+                .to_string()
         } else {
-            format!("{}", result.certificate_info.days_until_expiry).green().to_string()
+            format!("{}", result.certificate_info.days_until_expiry)
+                .green()
+                .to_string()
         }
     );
     println!("  Key Algorithm: {}", result.certificate_info.key_algorithm);
-    println!("  Signature:     {}", result.certificate_info.signature_algorithm);
-    println!("  Fingerprint:   {}", result.certificate_info.fingerprint_sha256);
-    
+    println!(
+        "  Signature:     {}",
+        result.certificate_info.signature_algorithm
+    );
+    println!(
+        "  Fingerprint:   {}",
+        result.certificate_info.fingerprint_sha256
+    );
+
     if !result.certificate_info.san.is_empty() {
-        println!("  SAN:           {}", result.certificate_info.san.join(", "));
+        println!(
+            "  SAN:           {}",
+            result.certificate_info.san.join(", ")
+        );
     }
     println!();
-    
+
     // Issues
     if !result.issues.is_empty() {
         println!("{}", "Issues Found:".red().bold());
@@ -212,7 +233,7 @@ pub fn print_validation_result(result: &ValidationResult) {
         }
         println!();
     }
-    
+
     // Warnings
     if !result.warnings.is_empty() {
         println!("{}", "Warnings:".yellow().bold());
@@ -221,7 +242,7 @@ pub fn print_validation_result(result: &ValidationResult) {
         }
         println!();
     }
-    
+
     println!("{}", "=".repeat(70));
 }
 
@@ -230,16 +251,20 @@ pub fn print_validation_result(result: &ValidationResult) {
 // ============================================================================
 
 /// Check certificate revocation status
-pub fn check_revocation(cert_path: &Path, use_ocsp: bool, use_crl: bool) -> Result<RevocationResult> {
+pub fn check_revocation(
+    cert_path: &Path,
+    use_ocsp: bool,
+    use_crl: bool,
+) -> Result<RevocationResult> {
     println!("{}", "Checking certificate revocation...".cyan().bold());
     println!("Certificate: {}", cert_path.display());
     println!("OCSP: {}, CRL: {}", use_ocsp, use_crl);
     println!();
-    
+
     // Read certificate
     let _cert_pem = fs::read_to_string(cert_path)
         .with_context(|| format!("Failed to read certificate: {}", cert_path.display()))?;
-    
+
     // Mock implementation - real would check OCSP/CRL
     let result = RevocationResult {
         status: RevocationStatus::Valid,
@@ -247,7 +272,7 @@ pub fn check_revocation(cert_path: &Path, use_ocsp: bool, use_crl: bool) -> Resu
         checked_at: Utc::now(),
         details: "Certificate is not revoked".to_string(),
     };
-    
+
     Ok(result)
 }
 
@@ -257,14 +282,14 @@ pub fn print_revocation_result(result: &RevocationResult) {
     println!("{}", "Revocation Check Result".bold());
     println!("{}", "=".repeat(70));
     println!();
-    
+
     print!("Status: ");
     match result.status {
         RevocationStatus::Valid => println!("{}", "✓ NOT REVOKED".green().bold()),
         RevocationStatus::Revoked => println!("{}", "✗ REVOKED".red().bold()),
         RevocationStatus::Unknown => println!("{}", "? UNKNOWN".yellow().bold()),
     }
-    
+
     println!("Method: {}", result.check_method);
     println!("Checked At: {}", result.checked_at);
     println!("Details: {}", result.details);
@@ -280,21 +305,21 @@ pub fn print_revocation_result(result: &RevocationResult) {
 pub fn run_health_checks() -> Result<Vec<HealthCheckResult>> {
     println!("{}", "Running health checks...".cyan().bold());
     println!();
-    
+
     let mut results = Vec::new();
-    
+
     // Check certificate files
     results.push(check_certificate_files()?);
-    
+
     // Check rotation manager
     results.push(check_rotation_manager()?);
-    
+
     // Check revocation service
     results.push(check_revocation_service()?);
-    
+
     // Check TLS configuration
     results.push(check_tls_configuration()?);
-    
+
     Ok(results)
 }
 
@@ -365,7 +390,7 @@ pub fn print_health_results(results: &[HealthCheckResult]) {
     println!("{}", "Health Check Results".bold());
     println!("{}", "=".repeat(70));
     println!();
-    
+
     for result in results {
         print!("{}: ", result.component.bold());
         match result.status {
@@ -374,32 +399,49 @@ pub fn print_health_results(results: &[HealthCheckResult]) {
             HealthStatus::Unhealthy => print!("{}", "✗ UNHEALTHY".red()),
         }
         println!(" - {}", result.message);
-        
+
         for detail in &result.details {
             println!("  • {}", detail);
         }
         println!();
     }
-    
+
     // Overall summary
-    let healthy_count = results.iter().filter(|r| r.status == HealthStatus::Healthy).count();
-    let degraded_count = results.iter().filter(|r| r.status == HealthStatus::Degraded).count();
-    let unhealthy_count = results.iter().filter(|r| r.status == HealthStatus::Unhealthy).count();
-    
+    let healthy_count = results
+        .iter()
+        .filter(|r| r.status == HealthStatus::Healthy)
+        .count();
+    let degraded_count = results
+        .iter()
+        .filter(|r| r.status == HealthStatus::Degraded)
+        .count();
+    let unhealthy_count = results
+        .iter()
+        .filter(|r| r.status == HealthStatus::Unhealthy)
+        .count();
+
     println!("{}", "Summary:".bold());
     println!("  Healthy:   {}", healthy_count);
     println!("  Degraded:  {}", degraded_count);
     println!("  Unhealthy: {}", unhealthy_count);
     println!();
-    
+
     if unhealthy_count > 0 {
-        println!("{}", "⚠ Action required: Some components are unhealthy".red().bold());
+        println!(
+            "{}",
+            "⚠ Action required: Some components are unhealthy"
+                .red()
+                .bold()
+        );
     } else if degraded_count > 0 {
-        println!("{}", "⚠ Warning: Some components are degraded".yellow().bold());
+        println!(
+            "{}",
+            "⚠ Warning: Some components are degraded".yellow().bold()
+        );
     } else {
         println!("{}", "✓ All systems operational".green().bold());
     }
-    
+
     println!("{}", "=".repeat(70));
 }
 
@@ -412,26 +454,26 @@ pub fn validate_configuration(config_path: &Path) -> Result<Vec<String>> {
     println!("{}", "Validating configuration...".cyan().bold());
     println!("Config file: {}", config_path.display());
     println!();
-    
+
     // Read config file
     let config_content = fs::read_to_string(config_path)
         .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
-    
+
     let mut issues = Vec::new();
-    
+
     // Check for required sections
     if !config_content.contains("[server]") {
         issues.push("Missing [server] section".to_string());
     }
-    
+
     if !config_content.contains("[network]") {
         issues.push("Missing [network] section".to_string());
     }
-    
+
     if !config_content.contains("[security]") {
         issues.push("Missing [security] section".to_string());
     }
-    
+
     // Check TLS configuration
     if config_content.contains("enable_tls = true") {
         if !config_content.contains("tls_cert_path") {
@@ -441,10 +483,10 @@ pub fn validate_configuration(config_path: &Path) -> Result<Vec<String>> {
             issues.push("TLS enabled but tls_key_path not specified".to_string());
         }
     }
-    
+
     // Check certificate paths exist
     // (In real implementation, parse TOML and check file paths)
-    
+
     Ok(issues)
 }
 
@@ -454,7 +496,7 @@ pub fn print_config_validation(issues: &[String]) {
     println!("{}", "Configuration Validation".bold());
     println!("{}", "=".repeat(70));
     println!();
-    
+
     if issues.is_empty() {
         println!("{}", "✓ Configuration is valid".green().bold());
     } else {
@@ -464,7 +506,7 @@ pub fn print_config_validation(issues: &[String]) {
             println!("  {} {}", "✗".red(), issue);
         }
     }
-    
+
     println!();
     println!("{}", "=".repeat(70));
 }
@@ -478,43 +520,50 @@ pub fn inspect_certificate(cert_path: &Path) -> Result<()> {
     println!("{}", "Inspecting certificate...".cyan().bold());
     println!("File: {}", cert_path.display());
     println!();
-    
+
     let cert_pem = fs::read_to_string(cert_path)
         .with_context(|| format!("Failed to read certificate: {}", cert_path.display()))?;
-    
+
     let cert_info = parse_certificate_info(&cert_pem)?;
-    
+
     println!("{}", "=".repeat(70));
     println!("{}", "Certificate Details".bold());
     println!("{}", "=".repeat(70));
     println!();
-    
+
     println!("{}", "Identity Information:".bold());
     println!("  Subject:       {}", cert_info.subject);
     println!("  Issuer:        {}", cert_info.issuer);
     println!("  Serial Number: {}", cert_info.serial_number);
     println!();
-    
+
     println!("{}", "Validity Period:".bold());
     println!("  Not Before:     {}", cert_info.not_before);
     println!("  Not After:      {}", cert_info.not_after);
-    println!("  Days Remaining: {}", 
+    println!(
+        "  Days Remaining: {}",
         if cert_info.is_expired {
-            format!("{} (EXPIRED)", cert_info.days_until_expiry).red().to_string()
+            format!("{} (EXPIRED)", cert_info.days_until_expiry)
+                .red()
+                .to_string()
         } else if cert_info.days_until_expiry < 30 {
-            format!("{}", cert_info.days_until_expiry).yellow().to_string()
+            format!("{}", cert_info.days_until_expiry)
+                .yellow()
+                .to_string()
         } else {
-            format!("{}", cert_info.days_until_expiry).green().to_string()
+            format!("{}", cert_info.days_until_expiry)
+                .green()
+                .to_string()
         }
     );
     println!();
-    
+
     println!("{}", "Cryptographic Information:".bold());
     println!("  Key Algorithm:       {}", cert_info.key_algorithm);
     println!("  Signature Algorithm: {}", cert_info.signature_algorithm);
     println!("  Fingerprint (SHA256): {}", cert_info.fingerprint_sha256);
     println!();
-    
+
     if !cert_info.san.is_empty() {
         println!("{}", "Subject Alternative Names:".bold());
         for san in &cert_info.san {
@@ -522,9 +571,9 @@ pub fn inspect_certificate(cert_path: &Path) -> Result<()> {
         }
         println!();
     }
-    
+
     println!("{}", "=".repeat(70));
-    
+
     Ok(())
 }
 
@@ -538,9 +587,9 @@ fn parse_certificate_info(_cert_pem: &str) -> Result<CertificateInfo> {
     let now = SystemTime::now();
     let not_before: DateTime<Utc> = (now - std::time::Duration::from_secs(90 * 86400)).into();
     let not_after: DateTime<Utc> = (now + std::time::Duration::from_secs(275 * 86400)).into();
-    
+
     let days_until_expiry = 275; // Mock value
-    
+
     Ok(CertificateInfo {
         subject: "CN=api.example.com,O=Example Corp".to_string(),
         issuer: "CN=Example CA,O=Example Corp".to_string(),

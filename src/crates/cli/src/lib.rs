@@ -2,14 +2,15 @@
 //!
 //! Command line interface utilities and service management for NORC applications.
 
-pub mod service;
 pub mod diagnostics;
+pub mod service;
 
-pub use service::{ServiceConfig, ServiceManager, ServiceStatus, get_service_manager, check_privileges};
 pub use diagnostics::{
-    validate_certificate, validate_certificate_chain, check_revocation, run_health_checks,
-    validate_configuration, inspect_certificate, print_validation_result, print_revocation_result,
-    print_health_results, print_config_validation, ValidationResult, RevocationResult,
-    HealthCheckResult, HealthStatus, RevocationStatus, CertificateInfo,
+    CertificateInfo, HealthCheckResult, HealthStatus, RevocationResult, RevocationStatus,
+    ValidationResult, check_revocation, inspect_certificate, print_config_validation,
+    print_health_results, print_revocation_result, print_validation_result, run_health_checks,
+    validate_certificate, validate_certificate_chain, validate_configuration,
 };
-
+pub use service::{
+    ServiceConfig, ServiceManager, ServiceStatus, check_privileges, get_service_manager,
+};

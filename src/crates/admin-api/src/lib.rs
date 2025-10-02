@@ -19,51 +19,50 @@
 //! - Audit log queries and compliance reporting
 
 pub mod auth;
-pub mod handlers;
-pub mod models;
-pub mod routes;
-pub mod middleware;
 pub mod error;
+pub mod handlers;
+pub mod middleware;
+pub mod models;
 pub mod rbac;
+pub mod routes;
 
-pub use error::{ApiError, ApiResult};
 pub use auth::{ApiKey, AuthContext};
-pub use rbac::{Role, Permission};
+pub use error::{ApiError, ApiResult};
+pub use rbac::{Permission, Role};
 
 use axum::Router;
-use std::sync::Arc;
-use norc_persistence::{
-    Database,
-    repositories::{
-        UserRepository, DeviceRepository, SessionRepository,
-        MessageRepository, FederationRepository, PresenceRepository,
-        AuditRepository,
-    },
-};
 use norc_config::ServerConfig;
+use norc_persistence::{
+    repositories::{
+        AuditRepository, DeviceRepository, FederationRepository, MessageRepository,
+        PresenceRepository, SessionRepository, UserRepository,
+    },
+    Database,
+};
 use norc_server_core::{ConnectionPool, MessageRouter, ObservabilitySystem};
+use std::sync::Arc;
 
 /// Admin API server configuration
 #[derive(Debug, Clone)]
 pub struct AdminApiConfig {
     /// Listen address for admin API
     pub bind_address: String,
-    
+
     /// Enable mTLS for admin API
     pub enable_mtls: bool,
-    
+
     /// Path to client CA certificates for mTLS
     pub client_ca_path: Option<String>,
-    
+
     /// API key storage path
     pub api_keys_path: String,
-    
+
     /// Session timeout in seconds
     pub session_timeout_secs: u64,
-    
+
     /// Rate limit: requests per minute per API key
     pub rate_limit_per_minute: u32,
-    
+
     /// Enable CORS (use with caution in production)
     pub enable_cors: bool,
 }
@@ -95,7 +94,7 @@ pub struct AdminApiState {
     pub federation_repo: Arc<FederationRepository>,
     pub presence_repo: Arc<PresenceRepository>,
     pub audit_repo: Arc<AuditRepository>,
-    
+
     // Server runtime components
     pub connection_pool: Arc<ConnectionPool>,
     pub message_router: Arc<MessageRouter>,
@@ -113,7 +112,7 @@ impl AdminApiState {
         observability: Arc<ObservabilitySystem>,
     ) -> Self {
         let pool = database.pool().clone();
-        
+
         Self {
             database,
             config,

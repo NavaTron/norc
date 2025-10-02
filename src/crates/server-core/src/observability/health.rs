@@ -24,10 +24,10 @@ pub struct ComponentHealth {
     pub name: String,
     pub status: HealthStatus,
     pub message: Option<String>,
-    
+
     #[allow(dead_code)]
     pub(crate) last_check: Instant,
-    
+
     pub response_time_ms: Option<u64>,
 }
 
@@ -37,7 +37,7 @@ pub struct HealthCheckResponse {
     pub status: HealthStatus,
     pub components: Vec<ComponentHealth>,
     pub uptime_seconds: u64,
-    
+
     #[allow(dead_code)]
     pub(crate) timestamp: Instant,
 }
@@ -90,11 +90,17 @@ impl HealthChecker {
     /// Get overall health status
     pub async fn get_health(&self) -> HealthCheckResponse {
         let components = self.components.read().await.clone();
-        
+
         // Determine overall status
-        let status = if components.iter().any(|c| c.status == HealthStatus::Unhealthy) {
+        let status = if components
+            .iter()
+            .any(|c| c.status == HealthStatus::Unhealthy)
+        {
             HealthStatus::Unhealthy
-        } else if components.iter().any(|c| c.status == HealthStatus::Degraded) {
+        } else if components
+            .iter()
+            .any(|c| c.status == HealthStatus::Degraded)
+        {
             HealthStatus::Degraded
         } else {
             HealthStatus::Healthy
@@ -111,13 +117,15 @@ impl HealthChecker {
     /// Check if system is ready (all components healthy or degraded)
     pub async fn is_ready(&self) -> bool {
         let components = self.components.read().await;
-        !components.iter().any(|c| c.status == HealthStatus::Unhealthy)
+        !components
+            .iter()
+            .any(|c| c.status == HealthStatus::Unhealthy)
     }
 
     /// Check if system is alive (at least some components are responsive)
     pub async fn is_alive(&self) -> bool {
         let components = self.components.read().await;
-        
+
         // System is alive if at least one component is healthy or degraded
         // and was checked recently (within last 60 seconds)
         let now = Instant::now();
@@ -131,16 +139,16 @@ impl HealthChecker {
     pub fn start_monitoring(self) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(30));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Perform health checks
                 let components = self.components.read().await.clone();
-                
+
                 for component in components {
                     let start = Instant::now();
-                    
+
                     // Perform component-specific health check
                     let (status, message) = match component.name.as_str() {
                         "transport" => check_transport_health().await,
@@ -149,18 +157,13 @@ impl HealthChecker {
                         "crypto" => check_crypto_health().await,
                         _ => (HealthStatus::Healthy, None),
                     };
-                    
+
                     let elapsed = start.elapsed();
-                    
-                    self.update_component(
-                        &component.name,
-                        status,
-                        message,
-                        Some(elapsed),
-                    )
-                    .await;
+
+                    self.update_component(&component.name, status, message, Some(elapsed))
+                        .await;
                 }
-                
+
                 let health = self.get_health().await;
                 tracing::debug!(
                     status = ?health.status,
@@ -219,20 +222,22 @@ mod tests {
     #[tokio::test]
     async fn test_register_and_update_component() {
         let checker = HealthChecker::new();
-        
+
         checker.register_component("test".to_string()).await;
-        
+
         let health = checker.get_health().await;
         assert_eq!(health.components.len(), 1);
         assert_eq!(health.components[0].status, HealthStatus::Healthy);
-        
-        checker.update_component(
-            "test",
-            HealthStatus::Degraded,
-            Some("Test degradation".to_string()),
-            None,
-        ).await;
-        
+
+        checker
+            .update_component(
+                "test",
+                HealthStatus::Degraded,
+                Some("Test degradation".to_string()),
+                None,
+            )
+            .await;
+
         let health = checker.get_health().await;
         assert_eq!(health.status, HealthStatus::Degraded);
     }
@@ -240,21 +245,25 @@ mod tests {
     #[tokio::test]
     async fn test_overall_status_determination() {
         let checker = HealthChecker::new();
-        
+
         checker.register_component("comp1".to_string()).await;
         checker.register_component("comp2".to_string()).await;
-        
+
         // All healthy
         let health = checker.get_health().await;
         assert_eq!(health.status, HealthStatus::Healthy);
-        
+
         // One degraded
-        checker.update_component("comp1", HealthStatus::Degraded, None, None).await;
+        checker
+            .update_component("comp1", HealthStatus::Degraded, None, None)
+            .await;
         let health = checker.get_health().await;
         assert_eq!(health.status, HealthStatus::Degraded);
-        
+
         // One unhealthy
-        checker.update_component("comp2", HealthStatus::Unhealthy, None, None).await;
+        checker
+            .update_component("comp2", HealthStatus::Unhealthy, None, None)
+            .await;
         let health = checker.get_health().await;
         assert_eq!(health.status, HealthStatus::Unhealthy);
     }

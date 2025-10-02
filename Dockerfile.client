@@ -1,0 +1,50 @@
+# Multi-stage build for NORC Client
+# Optimized for size and security
+
+# Build stage
+FROM rust:1.90-slim as builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy workspace files
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY src/ ./src/
+
+# Build release binaries (client and diagnostic tool)
+RUN cargo build --release --bin norc-client --bin norc-diag
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -u 1000 -s /bin/bash norc
+
+# Create directories
+RUN mkdir -p /etc/norc /home/norc/.config/norc && \
+    chown -R norc:norc /etc/norc /home/norc
+
+# Copy binaries from builder
+COPY --from=builder /build/target/release/norc-client /usr/local/bin/
+COPY --from=builder /build/target/release/norc-diag /usr/local/bin/
+
+# Switch to non-root user
+USER norc
+
+# Set working directory
+WORKDIR /home/norc
+
+# Run client
+ENTRYPOINT ["/usr/local/bin/norc-client"]
+CMD ["--help"]

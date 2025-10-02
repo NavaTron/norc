@@ -1,7 +1,10 @@
 //! Health check handlers
 
-use crate::{models::{HealthResponse, ComponentHealthStatus, ComponentHealth}, ApiResult, AdminApiState};
-use axum::{Json, extract::State};
+use crate::{
+    models::{ComponentHealth, ComponentHealthStatus, HealthResponse},
+    AdminApiState, ApiResult,
+};
+use axum::{extract::State, Json};
 use chrono::Utc;
 use std::time::SystemTime;
 
@@ -26,31 +29,29 @@ pub fn get_uptime_seconds() -> u64 {
 }
 
 /// Health check endpoint with detailed component status
-pub async fn health_check(
-    State(state): State<AdminApiState>,
-) -> ApiResult<Json<HealthResponse>> {
+pub async fn health_check(State(state): State<AdminApiState>) -> ApiResult<Json<HealthResponse>> {
     let now = Utc::now();
-    
+
     // Check database health
     let database_health = check_database_health(&state).await;
-    
+
     // Check transport health (basic check - listener would be in ServerCore)
     let transport_health = ComponentHealth {
         status: "healthy".to_string(),
         message: Some("Transport layer operational".to_string()),
         last_check: now,
     };
-    
+
     // Check federation health (basic check)
     let federation_health = check_federation_health(&state).await;
-    
+
     // Check crypto health (basic check - crypto is stateless)
     let crypto_health = ComponentHealth {
         status: "healthy".to_string(),
         message: Some("Cryptographic functions operational".to_string()),
         last_check: now,
     };
-    
+
     // Determine overall status based on components
     let overall_status = if database_health.status == "healthy" {
         "healthy"
@@ -59,7 +60,7 @@ pub async fn health_check(
     } else {
         "unhealthy"
     };
-    
+
     Ok(Json(HealthResponse {
         status: overall_status.to_string(),
         timestamp: now,
@@ -77,7 +78,7 @@ pub async fn health_check(
 /// Check database health by attempting a simple query
 async fn check_database_health(state: &AdminApiState) -> ComponentHealth {
     let now = Utc::now();
-    
+
     match state.database.pool().acquire().await {
         Ok(_) => ComponentHealth {
             status: "healthy".to_string(),
@@ -95,7 +96,7 @@ async fn check_database_health(state: &AdminApiState) -> ComponentHealth {
 /// Check federation health by counting active federation partners
 async fn check_federation_health(_state: &AdminApiState) -> ComponentHealth {
     let now = Utc::now();
-    
+
     // TODO: Implement actual federation partner count when repository supports it
     // For now, return healthy status
     ComponentHealth {
@@ -112,13 +113,13 @@ pub async fn readiness_check(
     // For readiness, we just check if database is accessible
     let now = Utc::now();
     let database_health = check_database_health(&state).await;
-    
+
     let status = if database_health.status == "healthy" {
         "ready"
     } else {
         "not_ready"
     };
-    
+
     Ok(Json(HealthResponse {
         status: status.to_string(),
         timestamp: now,

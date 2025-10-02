@@ -7,11 +7,11 @@ use crate::error::ServerError;
 use norc_config::ObservabilityConfig;
 
 #[cfg(feature = "tracing-otlp")]
-use opentelemetry::{global, KeyValue};
+use opentelemetry::{KeyValue, global};
 #[cfg(feature = "tracing-otlp")]
 use opentelemetry_otlp::WithExportConfig;
 #[cfg(feature = "tracing-otlp")]
-use opentelemetry_sdk::{runtime, Resource};
+use opentelemetry_sdk::{Resource, runtime};
 #[cfg(feature = "tracing-otlp")]
 use tracing_opentelemetry::OpenTelemetryLayer;
 #[cfg(feature = "tracing-otlp")]
@@ -52,7 +52,7 @@ impl Tracer {
     #[cfg(feature = "tracing-otlp")]
     fn init_opentelemetry(config: &ObservabilityConfig) -> Result<Self, ServerError> {
         use opentelemetry_sdk::trace::TracerProvider;
-        
+
         // Parse service name from organization_id or use default
         let service_name = format!("norc-server");
 

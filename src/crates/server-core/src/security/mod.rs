@@ -6,12 +6,12 @@
 //! - Input validation and sanitization
 //! - Privilege separation helpers
 
-pub mod rate_limiter;
 pub mod circuit_breaker;
-pub mod validator;
 pub mod privileges;
+pub mod rate_limiter;
+pub mod validator;
 
-pub use rate_limiter::{RateLimiter, RateLimiterConfig};
 pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
-pub use validator::{MessageValidator, ValidationError};
 pub use privileges::drop_privileges;
+pub use rate_limiter::{RateLimiter, RateLimiterConfig};
+pub use validator::{MessageValidator, ValidationError};

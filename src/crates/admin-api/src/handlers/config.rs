@@ -1,6 +1,6 @@
 //! Configuration management handlers
 
-use crate::{auth::AuthContext, models::*, rbac::Permission, AdminApiState, ApiResult, ApiError};
+use crate::{auth::AuthContext, models::*, rbac::Permission, AdminApiState, ApiError, ApiResult};
 use axum::{extract::State, Extension, Json};
 use chrono::Utc;
 use norc_config::ServerConfig;
@@ -12,10 +12,10 @@ pub async fn get_config(
     Extension(auth): Extension<AuthContext>,
 ) -> ApiResult<Json<Value>> {
     auth.require_permission(Permission::ConfigRead)?;
-    
+
     // Get actual configuration from state (with sensitive fields removed)
     let cfg = &state.server_config;
-    
+
     let config = json!({
         "organization_id": cfg.security.organization_id,
         "network": {
@@ -69,7 +69,7 @@ pub async fn get_config(
             "max_snapshots": cfg.storage.max_snapshots,
         },
     });
-    
+
     Ok(Json(config))
 }
 
@@ -80,13 +80,13 @@ pub async fn update_config(
     Json(request): Json<ConfigUpdateRequest>,
 ) -> ApiResult<Json<ConfigResponse>> {
     auth.require_permission(Permission::ConfigUpdate)?;
-    
+
     // Validate the configuration section and key
     validate_config_update(&request.section, &request.key, &request.value)?;
-    
+
     // TODO: Apply configuration update to ServerCore when available
     // For now, return success response with mock data
-    
+
     Ok(Json(ConfigResponse {
         section: request.section,
         key: request.key,
@@ -104,10 +104,10 @@ pub async fn validate_config(
     Json(config): Json<Value>,
 ) -> ApiResult<Json<ConfigValidationResponse>> {
     auth.require_permission(Permission::ConfigValidate)?;
-    
+
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
-    
+
     // Try to deserialize into ServerConfig to validate structure
     match serde_json::from_value::<ServerConfig>(config.clone()) {
         Ok(server_config) => {
@@ -115,16 +115,16 @@ pub async fn validate_config(
             if let Err(e) = server_config.validate() {
                 errors.push(format!("Configuration validation failed: {}", e));
             }
-            
+
             // Check for warnings
             if server_config.security.enable_pq_crypto {
                 warnings.push("Post-quantum cryptography is experimental".to_string());
             }
-            
+
             if !server_config.network.enable_tls {
                 warnings.push("TLS is disabled - connections will not be encrypted".to_string());
             }
-            
+
             if server_config.limits.max_connections > 50000 {
                 warnings.push("Very high connection limit may impact performance".to_string());
             }
@@ -133,9 +133,9 @@ pub async fn validate_config(
             errors.push(format!("Invalid configuration structure: {}", e));
         }
     }
-    
+
     let valid = errors.is_empty();
-    
+
     Ok(Json(ConfigValidationResponse {
         valid,
         errors,
@@ -166,7 +166,9 @@ fn validate_network_config(key: &str, value: &Value) -> Result<(), ApiError> {
         "bind_port" | "federation_port" => {
             if let Some(port) = value.as_u64() {
                 if port == 0 || port > 65535 {
-                    return Err(ApiError::BadRequest("Port must be between 1 and 65535".to_string()));
+                    return Err(ApiError::BadRequest(
+                        "Port must be between 1 and 65535".to_string(),
+                    ));
                 }
             } else {
                 return Err(ApiError::BadRequest("Port must be a number".to_string()));
@@ -204,7 +206,8 @@ fn validate_observability_config(key: &str, value: &Value) -> Result<(), ApiErro
             if let Some(level) = value.as_str() {
                 if !["error", "warn", "info", "debug", "trace"].contains(&level) {
                     return Err(ApiError::BadRequest(
-                        "Invalid log level. Must be: error, warn, info, debug, or trace".to_string(),
+                        "Invalid log level. Must be: error, warn, info, debug, or trace"
+                            .to_string(),
                     ));
                 }
             }

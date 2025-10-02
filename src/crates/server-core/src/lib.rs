@@ -21,13 +21,13 @@ pub mod signal_handler;
 
 pub use connection_handler::handle_connection;
 pub use connection_pool::{ConnectionId, ConnectionInfo, ConnectionPool, ConnectionPoolStats};
-pub use daemon::{daemonize, DaemonManager};
+pub use daemon::{DaemonManager, daemonize};
 pub use error::ServerError;
 pub use federation::FederationEngine;
 pub use logging::init_logging;
 pub use observability::{
-    health::{HealthChecker, HealthStatus},
     Logger, Metrics, ObservabilitySystem, Tracer,
+    health::{HealthChecker, HealthStatus},
 };
 pub use router::MessageRouter;
 pub use runtime::{AsyncRuntime, WorkloadType};
@@ -36,14 +36,14 @@ pub use security::{
     RateLimiterConfig, ValidationError,
 };
 pub use server::ServerCore;
-pub use signal_handler::{wait_for_shutdown, Signal};
+pub use signal_handler::{Signal, wait_for_shutdown};
 
 // Re-export auth types
 pub use auth::{
-    AuthContext, AuthResult, AuthenticationManager, DeviceAuthenticator, DeviceCredentials,
-    FederationAuthenticator, FederationCredentials, Permission, Role, Session, SessionManager,
-    SessionToken, AccessControl, RateLimiter as AuthRateLimiter, RateLimitConfig as AuthRateLimitConfig,
-    AuthProtocolHandler,
+    AccessControl, AuthContext, AuthProtocolHandler, AuthResult, AuthenticationManager,
+    DeviceAuthenticator, DeviceCredentials, FederationAuthenticator, FederationCredentials,
+    Permission, RateLimitConfig as AuthRateLimitConfig, RateLimiter as AuthRateLimiter, Role,
+    Session, SessionManager, SessionToken,
 };
 
 // Re-export authorization types
@@ -100,7 +100,7 @@ impl Server {
         // - Start transport listeners
         // - Initialize federation engine
         // - Start message router
-        
+
         {
             let mut state = self.state.write().await;
             *state = ServerState::Running;

@@ -122,16 +122,17 @@ impl SessionManager {
         role: super::Role,
     ) -> Result<Session, ServerError> {
         // Check session limit for this device
-        let oldest_token_to_remove = if let Some(device_sessions) = self.sessions_by_device.get(&device_id) {
-            if device_sessions.len() >= self.config.max_sessions_per_device {
-                // Get oldest session to remove
-                device_sessions.first().cloned()
+        let oldest_token_to_remove =
+            if let Some(device_sessions) = self.sessions_by_device.get(&device_id) {
+                if device_sessions.len() >= self.config.max_sessions_per_device {
+                    // Get oldest session to remove
+                    device_sessions.first().cloned()
+                } else {
+                    None
+                }
             } else {
                 None
-            }
-        } else {
-            None
-        };
+            };
 
         // Remove oldest session if needed
         if let Some(token) = oldest_token_to_remove {
@@ -150,7 +151,7 @@ impl SessionManager {
             id: uuid::Uuid::new_v4().to_string(),
             token: token.clone(),
             device_id: device_id.clone(),
-            user_id: None, // Set by caller if needed
+            user_id: None,                  // Set by caller if needed
             organization_id: String::new(), // Set by caller
             role,
             created_at: now,
@@ -235,7 +236,10 @@ impl SessionManager {
     }
 
     /// Revoke all sessions for a device
-    pub async fn revoke_device_sessions(&mut self, device_id: &DeviceId) -> Result<(), ServerError> {
+    pub async fn revoke_device_sessions(
+        &mut self,
+        device_id: &DeviceId,
+    ) -> Result<(), ServerError> {
         if let Some(device_sessions) = self.sessions_by_device.remove(device_id) {
             for token in device_sessions {
                 self.sessions.remove(&token);
@@ -259,7 +263,10 @@ impl SessionManager {
         }
 
         if !self.sessions.is_empty() {
-            info!("Cleaned up expired sessions, {} active sessions remaining", self.sessions.len());
+            info!(
+                "Cleaned up expired sessions, {} active sessions remaining",
+                self.sessions.len()
+            );
         }
     }
 
@@ -292,7 +299,10 @@ mod tests {
         let device_id = create_test_device_id();
         let role = Role::User;
 
-        let session = manager.create_session(device_id.clone(), role).await.unwrap();
+        let session = manager
+            .create_session(device_id.clone(), role)
+            .await
+            .unwrap();
 
         assert_eq!(session.device_id, device_id);
         assert_eq!(manager.session_count(), 1);

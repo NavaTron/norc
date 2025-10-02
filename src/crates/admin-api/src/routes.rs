@@ -5,7 +5,10 @@
 use crate::{
     auth::ApiKeyStore,
     handlers,
-    middleware::{auth_middleware, audit_middleware, rate_limit_middleware, security_headers_middleware, RateLimiter},
+    middleware::{
+        audit_middleware, auth_middleware, rate_limit_middleware, security_headers_middleware,
+        RateLimiter,
+    },
     AdminApiState,
 };
 use axum::{
@@ -24,13 +27,13 @@ pub fn build_routes(state: AdminApiState) -> Router {
         state.config.rate_limit_per_minute,
         state.config.rate_limit_per_minute,
     ));
-    
+
     // Public routes (no authentication required)
     let public_routes = Router::new()
         .route("/health", get(handlers::health_check))
         .route("/ready", get(handlers::readiness_check))
         .route("/metrics", get(handlers::get_prometheus_metrics));
-    
+
     // Protected routes (authentication required)
     let protected_routes = Router::new()
         // User management (F-08.04.01)
@@ -87,7 +90,7 @@ pub fn build_routes(state: AdminApiState) -> Router {
             key_store.clone(),
             auth_middleware,
         ));
-    
+
     // Combine routes with version prefix
     Router::new()
         .nest("/api/v1", protected_routes)
@@ -106,7 +109,7 @@ mod tests {
     async fn test_router_builds() {
         // This test just verifies the router can be constructed
         let _config = AdminApiConfig::default();
-        
+
         // Mock database - in real tests, use a test database
         // let database = Arc::new(Database::new(...).await.unwrap());
         // For now, we'll skip this test since we need a real database

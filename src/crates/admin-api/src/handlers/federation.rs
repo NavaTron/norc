@@ -1,7 +1,10 @@
 //! Federation management handlers
 
 use crate::{auth::AuthContext, models::*, rbac::Permission, AdminApiState, ApiResult};
-use axum::{extract::{Path, State}, Extension, Json};
+use axum::{
+    extract::{Path, State},
+    Extension, Json,
+};
 use uuid::Uuid;
 
 /// List federation partners

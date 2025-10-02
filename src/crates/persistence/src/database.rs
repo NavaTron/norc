@@ -1,8 +1,8 @@
 //! Database connection and pool management
 
 use crate::error::{PersistenceError, Result};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use sqlx::migrate::MigrateDatabase;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::str::FromStr;
 use std::time::Duration;
 use tracing::info;
@@ -46,8 +46,11 @@ impl Database {
 
         // Create database if it doesn't exist
         let db_url = format!("sqlite://{}", config.path);
-        
-        if !sqlx::Sqlite::database_exists(&db_url).await.unwrap_or(false) {
+
+        if !sqlx::Sqlite::database_exists(&db_url)
+            .await
+            .unwrap_or(false)
+        {
             info!("Creating database file...");
             sqlx::Sqlite::create_database(&db_url)
                 .await
@@ -85,7 +88,7 @@ impl Database {
     /// Run database migrations
     pub async fn migrate(&self) -> Result<()> {
         info!("Running database migrations...");
-        
+
         sqlx::migrate!("./migrations")
             .run(&self.pool)
             .await
@@ -97,9 +100,7 @@ impl Database {
 
     /// Check database health
     pub async fn health_check(&self) -> Result<()> {
-        sqlx::query("SELECT 1")
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("SELECT 1").execute(&self.pool).await?;
         Ok(())
     }
 

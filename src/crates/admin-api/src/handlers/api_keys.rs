@@ -1,7 +1,15 @@
 //! API key management handlers
 
-use crate::{auth::{ApiKey, AuthContext}, models::*, rbac::Permission, AdminApiState, ApiResult};
-use axum::{extract::{Path, State}, Extension, Json};
+use crate::{
+    auth::{ApiKey, AuthContext},
+    models::*,
+    rbac::Permission,
+    AdminApiState, ApiResult,
+};
+use axum::{
+    extract::{Path, State},
+    Extension, Json,
+};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -11,7 +19,7 @@ pub async fn list_api_keys(
     Extension(auth): Extension<AuthContext>,
 ) -> ApiResult<Json<ApiKeyListResponse>> {
     auth.require_permission(Permission::ApiKeyRead)?;
-    
+
     // TODO: Fetch from key store
     Ok(Json(ApiKeyListResponse {
         keys: vec![],
@@ -26,19 +34,21 @@ pub async fn create_api_key(
     Json(request): Json<CreateApiKeyRequest>,
 ) -> ApiResult<Json<ApiKeyResponse>> {
     auth.require_permission(Permission::ApiKeyCreate)?;
-    
+
     // Validate request
-    request.validate().map_err(|e| crate::ApiError::Validation(e.to_string()))?;
-    
+    request
+        .validate()
+        .map_err(|e| crate::ApiError::Validation(e.to_string()))?;
+
     // Create the API key
     let (api_key, raw_key) = ApiKey::new(
         request.name.clone(),
         request.roles.clone(),
         request.organization_id.clone(),
     );
-    
+
     // TODO: Store in key store
-    
+
     // Return response with the raw key (only time it's exposed)
     Ok(Json(ApiKeyResponse {
         id: api_key.id,
@@ -60,7 +70,7 @@ pub async fn revoke_api_key(
     Path(_key_id): Path<Uuid>,
 ) -> ApiResult<Json<serde_json::Value>> {
     auth.require_permission(Permission::ApiKeyRevoke)?;
-    
+
     // TODO: Revoke in key store
     Ok(Json(serde_json::json!({"status": "revoked"})))
 }
@@ -72,7 +82,7 @@ pub async fn delete_api_key(
     Path(_key_id): Path<Uuid>,
 ) -> ApiResult<Json<serde_json::Value>> {
     auth.require_permission(Permission::ApiKeyRevoke)?;
-    
+
     // TODO: Delete from key store
     Ok(Json(serde_json::json!({"status": "deleted"})))
 }

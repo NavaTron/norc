@@ -1,14 +1,14 @@
 //! Federation engine per SERVER_REQUIREMENTS E-05
 
 use norc_config::ServerConfig;
-use norc_protocol::{messages::EncryptedMessage, TrustLevel, ProtocolVersion};
-use norc_transport::tls::{TlsClientTransport, TlsServerTransport};
+use norc_protocol::{ProtocolVersion, TrustLevel, messages::EncryptedMessage};
 use norc_transport::Transport;
+use norc_transport::tls::{TlsClientTransport, TlsServerTransport};
 use rustls::ClientConfig;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, Mutex};
-use tracing::{info, error, warn};
+use tokio::sync::{Mutex, RwLock};
+use tracing::{error, info, warn};
 
 /// Federation partner connection state
 #[derive(Debug, Clone)]
@@ -105,8 +105,8 @@ impl FederationEngine {
         let mut partners = self.partners.write().await;
 
         for partner_config in &self.config.federation.partners {
-            let trust_level = TrustLevel::parse(&partner_config.trust_level)
-                .unwrap_or(TrustLevel::Basic);
+            let trust_level =
+                TrustLevel::parse(&partner_config.trust_level).unwrap_or(TrustLevel::Basic);
 
             let partner = FederationPartner {
                 org_id: partner_config.organization_id.clone(),
@@ -117,7 +117,10 @@ impl FederationEngine {
             };
 
             partners.insert(partner.org_id.clone(), partner);
-            info!("Registered federation partner: {}", partner_config.organization_id);
+            info!(
+                "Registered federation partner: {}",
+                partner_config.organization_id
+            );
         }
 
         // Start connection management background task
@@ -136,7 +139,7 @@ impl FederationEngine {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
             loop {
                 interval.tick().await;
-                
+
                 // Check and reconnect disconnected partners
                 let partner_list = {
                     let p = partners.read().await;
@@ -144,7 +147,10 @@ impl FederationEngine {
                 };
 
                 for partner in partner_list {
-                    if matches!(partner.state, PartnerState::Disconnected | PartnerState::Failed(_)) {
+                    if matches!(
+                        partner.state,
+                        PartnerState::Disconnected | PartnerState::Failed(_)
+                    ) {
                         info!("Attempting to reconnect to partner: {}", partner.org_id);
                         if let Err(e) = engine.connect_partner(&partner.org_id).await {
                             warn!("Failed to reconnect to {}: {}", partner.org_id, e);
@@ -156,8 +162,12 @@ impl FederationEngine {
                 let conns = connections.read().await;
                 for (org_id, conn) in conns.iter() {
                     let idle_time = conn.last_activity.elapsed().as_secs();
-                    if idle_time > 300 {  // 5 minutes
-                        info!("Connection to {} idle for {}s, will reconnect if needed", org_id, idle_time);
+                    if idle_time > 300 {
+                        // 5 minutes
+                        info!(
+                            "Connection to {} idle for {}s, will reconnect if needed",
+                            org_id, idle_time
+                        );
                     }
                 }
             }
@@ -178,31 +188,34 @@ impl FederationEngine {
     pub async fn connect_partner(&self, org_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut partners = self.partners.write().await;
 
-        let partner = partners.get_mut(org_id)
+        let partner = partners
+            .get_mut(org_id)
             .ok_or_else(|| format!("Unknown partner: {}", org_id))?;
 
         partner.state = PartnerState::Connecting;
         partner.connection_attempts += 1;
-        info!("Connecting to federation partner: {} (attempt {})", org_id, partner.connection_attempts);
+        info!(
+            "Connecting to federation partner: {} (attempt {})",
+            org_id, partner.connection_attempts
+        );
 
         // Create TLS client config with mutual TLS
         let mut root_store = rustls::RootCertStore::empty();
-        root_store.extend(
-            webpki_roots::TLS_SERVER_ROOTS
-                .iter()
-                .cloned()
-        );
-        
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
         let tls_config = Arc::new(
             ClientConfig::builder()
                 .with_root_certificates(root_store)
-                .with_no_client_auth()  // TODO: Add client certificate auth
+                .with_no_client_auth(), // TODO: Add client certificate auth
         );
-        
+
         match TlsClientTransport::connect(&partner.address, tls_config).await {
             Ok(mut transport) => {
                 // Perform federation handshake
-                match self.perform_handshake(&mut transport, &partner.org_id).await {
+                match self
+                    .perform_handshake(&mut transport, &partner.org_id)
+                    .await
+                {
                     Ok(_) => {
                         let connection = Arc::new(FederationConnection {
                             transport: Arc::new(Mutex::new(transport)),
@@ -211,7 +224,10 @@ impl FederationEngine {
                             last_activity: std::time::Instant::now(),
                         });
 
-                        self.connections.write().await.insert(org_id.to_string(), connection);
+                        self.connections
+                            .write()
+                            .await
+                            .insert(org_id.to_string(), connection);
                         partner.state = PartnerState::Connected;
                         partner.connection_attempts = 0;
                         info!("Successfully connected to partner: {}", org_id);
@@ -243,7 +259,7 @@ impl FederationEngine {
         let handshake = FederationHandshake {
             org_id: self.config.organization_id.clone(),
             protocol_version: self.protocol_version,
-            cert_fingerprint: "".to_string(),  // TODO: Get actual cert fingerprint
+            cert_fingerprint: "".to_string(), // TODO: Get actual cert fingerprint
             trust_level: TrustLevel::Basic,
         };
 
@@ -268,7 +284,7 @@ impl FederationEngine {
         transport: Arc<Mutex<TlsServerTransport>>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let mut transport_guard = transport.lock().await;
-        
+
         // Receive handshake request
         let handshake_data = transport_guard.receive().await?;
         let handshake: FederationHandshake = bincode::deserialize(&handshake_data)?;
@@ -281,8 +297,9 @@ impl FederationEngine {
 
         let response = if let Some(_partner) = partner {
             // Simple protocol version check (for now, just check major version)
-            let version_compatible = handshake.protocol_version.major == self.protocol_version.major;
-            
+            let version_compatible =
+                handshake.protocol_version.major == self.protocol_version.major;
+
             if version_compatible {
                 FederationHandshakeResponse {
                     accepted: true,
@@ -325,7 +342,8 @@ impl FederationEngine {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let connections = self.connections.read().await;
 
-        let connection = connections.get(target_org)
+        let connection = connections
+            .get(target_org)
             .ok_or_else(|| format!("No active connection to: {}", target_org))?;
 
         // Serialize and send message
@@ -333,7 +351,11 @@ impl FederationEngine {
         let mut transport = connection.transport.lock().await;
         transport.send(&message_data).await?;
 
-        info!("Routed message to {} ({} bytes)", target_org, message_data.len());
+        info!(
+            "Routed message to {} ({} bytes)",
+            target_org,
+            message_data.len()
+        );
         Ok(())
     }
 
@@ -352,7 +374,7 @@ impl FederationEngine {
     /// Disconnect from a partner
     pub async fn disconnect_partner(&self, org_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut connections = self.connections.write().await;
-        
+
         if let Some(conn) = connections.remove(org_id) {
             let mut transport = conn.transport.lock().await;
             transport.close().await?;

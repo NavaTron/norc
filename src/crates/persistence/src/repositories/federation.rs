@@ -52,7 +52,9 @@ impl FederationRepository {
         .bind(organization_id)
         .fetch_optional(&self.pool)
         .await?
-        .ok_or_else(|| PersistenceError::NotFound(format!("Federation trust not found: {}", organization_id)))
+        .ok_or_else(|| {
+            PersistenceError::NotFound(format!("Federation trust not found: {}", organization_id))
+        })
     }
 
     /// Get all active federation partners

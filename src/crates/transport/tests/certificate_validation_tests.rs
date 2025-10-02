@@ -5,7 +5,6 @@
 /// - Certificate fingerprint computation
 /// - Certificate pinning validation
 /// - Mutual TLS configuration
-
 mod common;
 
 use common::*;
@@ -18,8 +17,8 @@ use sha2::{Digest, Sha256};
 #[test]
 fn test_extract_organization_id_from_valid_cert() {
     // Create a certificate with organization name
-    let cert_bundle = create_client_cert("ACME-Corp", "client-001", None)
-        .expect("Failed to create client cert");
+    let cert_bundle =
+        create_client_cert("ACME-Corp", "client-001", None).expect("Failed to create client cert");
 
     let org_id = extract_organization_id(&cert_bundle.as_rustls_cert())
         .expect("Failed to extract organization ID");
@@ -58,18 +57,21 @@ fn test_extract_organization_id_from_multiple_orgs() {
         .push(rcgen::DnType::CommonName, "test.example.com".to_string());
 
     let key_pair = rcgen::KeyPair::generate().expect("Failed to generate key pair");
-    let certificate = params.self_signed(&key_pair)
+    let certificate = params
+        .self_signed(&key_pair)
         .expect("Failed to create certificate");
 
     let cert_der = certificate.der().to_vec();
     let cert = CertificateDer::from(cert_der);
 
-    let org_id = extract_organization_id(&cert)
-        .expect("Failed to extract organization ID");
+    let org_id = extract_organization_id(&cert).expect("Failed to extract organization ID");
 
     // Should extract one of the organizations (order not guaranteed)
-    assert!(org_id == "FirstOrg" || org_id == "SecondOrg", 
-        "Expected FirstOrg or SecondOrg, got: {}", org_id);
+    assert!(
+        org_id == "FirstOrg" || org_id == "SecondOrg",
+        "Expected FirstOrg or SecondOrg, got: {}",
+        org_id
+    );
 }
 
 #[test]
@@ -83,7 +85,8 @@ fn test_extract_organization_id_no_org_or_cn() {
         .push(rcgen::DnType::CountryName, "US".to_string());
 
     let key_pair = rcgen::KeyPair::generate().expect("Failed to generate key pair");
-    let certificate = params.self_signed(&key_pair)
+    let certificate = params
+        .self_signed(&key_pair)
         .expect("Failed to create certificate");
 
     let cert_der = certificate.der().to_vec();
@@ -97,8 +100,8 @@ fn test_extract_organization_id_no_org_or_cn() {
 
 #[test]
 fn test_compute_certificate_fingerprint() {
-    let cert_bundle = create_client_cert("TestOrg", "client-001", None)
-        .expect("Failed to create client cert");
+    let cert_bundle =
+        create_client_cert("TestOrg", "client-001", None).expect("Failed to create client cert");
 
     let fingerprint = compute_certificate_fingerprint(&cert_bundle.as_rustls_cert())
         .expect("Failed to compute fingerprint");
@@ -131,10 +134,8 @@ fn test_compute_fingerprint_consistency() {
 #[test]
 fn test_compute_fingerprint_different_certs() {
     // Different certificates should produce different fingerprints
-    let cert1 = create_client_cert("Org1", "client-001", None)
-        .expect("Failed to create cert 1");
-    let cert2 = create_client_cert("Org2", "client-002", None)
-        .expect("Failed to create cert 2");
+    let cert1 = create_client_cert("Org1", "client-001", None).expect("Failed to create cert 1");
+    let cert2 = create_client_cert("Org2", "client-002", None).expect("Failed to create cert 2");
 
     let fingerprint1 = compute_certificate_fingerprint(&cert1.as_rustls_cert())
         .expect("Failed to compute fingerprint 1");
@@ -146,8 +147,8 @@ fn test_compute_fingerprint_different_certs() {
 
 #[test]
 fn test_verify_certificate_pin_valid() {
-    let cert_bundle = create_client_cert("TestOrg", "client-001", None)
-        .expect("Failed to create client cert");
+    let cert_bundle =
+        create_client_cert("TestOrg", "client-001", None).expect("Failed to create client cert");
 
     let fingerprint = compute_certificate_fingerprint(&cert_bundle.as_rustls_cert())
         .expect("Failed to compute fingerprint");
@@ -156,13 +157,16 @@ fn test_verify_certificate_pin_valid() {
     let pins = vec![fingerprint.clone()];
     let result = verify_certificate_pin(&cert_bundle.as_rustls_cert(), &pins);
 
-    assert!(result.is_ok(), "Should verify successfully with correct pin");
+    assert!(
+        result.is_ok(),
+        "Should verify successfully with correct pin"
+    );
 }
 
 #[test]
 fn test_verify_certificate_pin_invalid() {
-    let cert_bundle = create_client_cert("TestOrg", "client-001", None)
-        .expect("Failed to create client cert");
+    let cert_bundle =
+        create_client_cert("TestOrg", "client-001", None).expect("Failed to create client cert");
 
     // Create a wrong pin
     let wrong_pin = vec![0u8; 32];
@@ -170,25 +174,22 @@ fn test_verify_certificate_pin_invalid() {
 
     let result = verify_certificate_pin(&cert_bundle.as_rustls_cert(), &pins);
 
-    assert!(
-        result.is_err(),
-        "Should fail with incorrect pin"
-    );
+    assert!(result.is_err(), "Should fail with incorrect pin");
 }
 
 #[test]
 fn test_verify_certificate_pin_multiple_pins() {
-    let cert_bundle = create_client_cert("TestOrg", "client-001", None)
-        .expect("Failed to create client cert");
+    let cert_bundle =
+        create_client_cert("TestOrg", "client-001", None).expect("Failed to create client cert");
 
     let fingerprint = compute_certificate_fingerprint(&cert_bundle.as_rustls_cert())
         .expect("Failed to compute fingerprint");
 
     // Create multiple pins, correct one in the middle
     let pins = vec![
-        vec![0u8; 32],           // Wrong
-        fingerprint.clone(),     // Correct
-        vec![1u8; 32],           // Wrong
+        vec![0u8; 32],       // Wrong
+        fingerprint.clone(), // Correct
+        vec![1u8; 32],       // Wrong
     ];
 
     let result = verify_certificate_pin(&cert_bundle.as_rustls_cert(), &pins);
@@ -201,23 +202,20 @@ fn test_verify_certificate_pin_multiple_pins() {
 
 #[test]
 fn test_verify_certificate_pin_empty_pins() {
-    let cert_bundle = create_client_cert("TestOrg", "client-001", None)
-        .expect("Failed to create client cert");
+    let cert_bundle =
+        create_client_cert("TestOrg", "client-001", None).expect("Failed to create client cert");
 
     let pins = vec![];
     let result = verify_certificate_pin(&cert_bundle.as_rustls_cert(), &pins);
 
-    assert!(
-        result.is_err(),
-        "Should fail when pin list is empty"
-    );
+    assert!(result.is_err(), "Should fail when pin list is empty");
 }
 
 #[test]
 fn test_certificate_chain_validation() {
     // Create a complete certificate chain
-    let (root_ca, intermediate_ca, end_entity) = create_cert_chain("TestOrg", false)
-        .expect("Failed to create cert chain");
+    let (root_ca, intermediate_ca, end_entity) =
+        create_cert_chain("TestOrg", false).expect("Failed to create cert chain");
 
     // Each certificate should have a valid fingerprint
     let root_fp = compute_certificate_fingerprint(&root_ca.as_rustls_cert())
@@ -233,8 +231,8 @@ fn test_certificate_chain_validation() {
     assert_ne!(intermediate_fp, end_entity_fp);
 
     // Each certificate should have a valid organization ID
-    let root_org = extract_organization_id(&root_ca.as_rustls_cert())
-        .expect("Failed to extract root org");
+    let root_org =
+        extract_organization_id(&root_ca.as_rustls_cert()).expect("Failed to extract root org");
     let intermediate_org = extract_organization_id(&intermediate_ca.as_rustls_cert())
         .expect("Failed to extract intermediate org");
     let end_entity_org = extract_organization_id(&end_entity.as_rustls_cert())
@@ -249,10 +247,10 @@ fn test_certificate_chain_validation() {
 #[test]
 fn test_pinning_with_cert_rotation() {
     // Simulate certificate rotation scenario
-    let old_cert = create_client_cert("TestOrg", "client-001", None)
-        .expect("Failed to create old cert");
-    let new_cert = create_client_cert("TestOrg", "client-001", None)
-        .expect("Failed to create new cert");
+    let old_cert =
+        create_client_cert("TestOrg", "client-001", None).expect("Failed to create old cert");
+    let new_cert =
+        create_client_cert("TestOrg", "client-001", None).expect("Failed to create new cert");
 
     let old_pin = compute_certificate_fingerprint(&old_cert.as_rustls_cert())
         .expect("Failed to compute old fingerprint");
@@ -265,8 +263,14 @@ fn test_pinning_with_cert_rotation() {
     let result_old = verify_certificate_pin(&old_cert.as_rustls_cert(), &pins);
     let result_new = verify_certificate_pin(&new_cert.as_rustls_cert(), &pins);
 
-    assert!(result_old.is_ok(), "Old certificate should verify with both pins");
-    assert!(result_new.is_ok(), "New certificate should verify with both pins");
+    assert!(
+        result_old.is_ok(),
+        "Old certificate should verify with both pins"
+    );
+    assert!(
+        result_new.is_ok(),
+        "New certificate should verify with both pins"
+    );
 
     // After rotation, only new pin should be valid
     let pins_post_rotation = vec![new_pin.clone()];
@@ -274,8 +278,14 @@ fn test_pinning_with_cert_rotation() {
     let result_old_post = verify_certificate_pin(&old_cert.as_rustls_cert(), &pins_post_rotation);
     let result_new_post = verify_certificate_pin(&new_cert.as_rustls_cert(), &pins_post_rotation);
 
-    assert!(result_old_post.is_err(), "Old certificate should fail with only new pin");
-    assert!(result_new_post.is_ok(), "New certificate should verify with new pin");
+    assert!(
+        result_old_post.is_err(),
+        "Old certificate should fail with only new pin"
+    );
+    assert!(
+        result_new_post.is_ok(),
+        "New certificate should verify with new pin"
+    );
 }
 
 #[test]
@@ -303,8 +313,7 @@ fn test_organization_id_extraction_edge_cases() {
 
 #[test]
 fn test_fingerprint_hex_encoding() {
-    let cert = create_client_cert("TestOrg", "client-001", None)
-        .expect("Failed to create cert");
+    let cert = create_client_cert("TestOrg", "client-001", None).expect("Failed to create cert");
 
     let fingerprint = compute_certificate_fingerprint(&cert.as_rustls_cert())
         .expect("Failed to compute fingerprint");
@@ -331,7 +340,8 @@ fn test_certificate_with_no_extensions() {
         .push(rcgen::DnType::CommonName, "minimal.example.com".to_string());
 
     let key_pair = rcgen::KeyPair::generate().expect("Failed to generate key pair");
-    let certificate = params.self_signed(&key_pair)
+    let certificate = params
+        .self_signed(&key_pair)
         .expect("Failed to create certificate");
 
     let cert_der = certificate.der().to_vec();

@@ -29,4 +29,3 @@ pub enum ConfigError {
     #[error("Invalid value for {0}: {1}")]
     InvalidValue(String, String),
 }
-

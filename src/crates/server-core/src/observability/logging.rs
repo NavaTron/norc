@@ -11,9 +11,9 @@ use tokio::sync::RwLock;
 use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
+    EnvFilter, Registry,
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt,
-    EnvFilter, Registry,
 };
 
 /// Logger handle that maintains the worker guard and supports rotation
@@ -26,22 +26,22 @@ impl Logger {
     /// Initialize the logging system
     pub fn init(config: &ObservabilityConfig) -> Result<Self, ServerError> {
         let level = parse_log_level(&config.log_level)?;
-        
+
         // Create environment filter with default level
-        let env_filter = EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| {
-                EnvFilter::new(format!("norc={},tower=info,hyper=info", level.as_str()))
-            });
+        let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            EnvFilter::new(format!("norc={},tower=info,hyper=info", level.as_str()))
+        });
 
         // Configure file appender with rotation
         let file_appender = tracing_appender::rolling::daily(
             config.log_file_path.parent().unwrap_or(&PathBuf::from(".")),
-            config.log_file_path
+            config
+                .log_file_path
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("norc-server.log"),
         );
-        
+
         let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
         // Build the subscriber based on format
@@ -57,14 +57,10 @@ impl Logger {
                     .with_file(true)
                     .with_line_number(true);
 
-                let subscriber = Registry::default()
-                    .with(env_filter)
-                    .with(fmt_layer);
+                let subscriber = Registry::default().with(env_filter).with(fmt_layer);
 
                 tracing::subscriber::set_global_default(subscriber)
-                    .map_err(|e| {
-                        ServerError::Internal(format!("Failed to set logger: {}", e))
-                    })?;
+                    .map_err(|e| ServerError::Internal(format!("Failed to set logger: {}", e)))?;
             }
             "pretty" => {
                 let fmt_layer = fmt::layer()
@@ -77,14 +73,10 @@ impl Logger {
                     .with_file(true)
                     .with_line_number(true);
 
-                let subscriber = Registry::default()
-                    .with(env_filter)
-                    .with(fmt_layer);
+                let subscriber = Registry::default().with(env_filter).with(fmt_layer);
 
                 tracing::subscriber::set_global_default(subscriber)
-                    .map_err(|e| {
-                        ServerError::Internal(format!("Failed to set logger: {}", e))
-                    })?;
+                    .map_err(|e| ServerError::Internal(format!("Failed to set logger: {}", e)))?;
             }
             "compact" => {
                 let fmt_layer = fmt::layer()
@@ -94,31 +86,21 @@ impl Logger {
                     .with_thread_ids(true)
                     .with_target(true);
 
-                let subscriber = Registry::default()
-                    .with(env_filter)
-                    .with(fmt_layer);
+                let subscriber = Registry::default().with(env_filter).with(fmt_layer);
 
                 tracing::subscriber::set_global_default(subscriber)
-                    .map_err(|e| {
-                        ServerError::Internal(format!("Failed to set logger: {}", e))
-                    })?;
+                    .map_err(|e| ServerError::Internal(format!("Failed to set logger: {}", e)))?;
             }
             _ => {
-                return Err(ServerError::Config(
-                    norc_config::ConfigError::Validation(format!(
-                        "Unknown log format: {}",
-                        config.log_format
-                    )),
-                ));
+                return Err(ServerError::Config(norc_config::ConfigError::Validation(
+                    format!("Unknown log format: {}", config.log_format),
+                )));
             }
         }
 
-        eprintln!(
-            "Logging initialized with level: {}",
-            level
-        );
+        eprintln!("Logging initialized with level: {}", level);
 
-        Ok(Logger { 
+        Ok(Logger {
             _guard: guard,
             config: Arc::new(RwLock::new(config.clone())),
         })
@@ -127,21 +109,21 @@ impl Logger {
     /// Rotate log files (triggered by SIGUSR1)
     pub async fn rotate(&self) -> Result<(), ServerError> {
         let config = self.config.read().await;
-        
+
         tracing::info!("Log rotation triggered via SIGUSR1");
-        
+
         // The tracing_appender with rolling::daily automatically handles rotation
         // based on date changes. For manual rotation on SIGUSR1, we log the event
         // and flush any pending writes.
-        
+
         // Future enhancement: Support for size-based rotation or manual file rotation
         // would require recreating the appender with a new file handle
-        
+
         tracing::info!(
             log_file = ?config.log_file_path,
             "Log rotation completed - daily appender handles file management"
         );
-        
+
         Ok(())
     }
 }
@@ -154,9 +136,9 @@ fn parse_log_level(level: &str) -> Result<Level, ServerError> {
         "info" => Ok(Level::INFO),
         "warn" => Ok(Level::WARN),
         "error" => Ok(Level::ERROR),
-        _ => Err(ServerError::Config(
-            norc_config::ConfigError::Validation(format!("Invalid log level: {}", level)),
-        )),
+        _ => Err(ServerError::Config(norc_config::ConfigError::Validation(
+            format!("Invalid log level: {}", level),
+        ))),
     }
 }
 

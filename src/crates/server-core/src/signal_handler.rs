@@ -26,7 +26,7 @@ impl SignalHandler {
     /// Create a new signal handler
     pub fn new() -> Self {
         let (shutdown_tx, shutdown_rx) = broadcast::channel(16);
-        
+
         Self {
             shutdown_tx,
             _shutdown_rx: shutdown_rx,
@@ -41,7 +41,7 @@ impl SignalHandler {
     /// Install signal handlers and start monitoring
     pub async fn install(&self) -> Result<(), ServerError> {
         let tx = self.shutdown_tx.clone();
-        
+
         // Handle Ctrl+C (SIGINT)
         let tx_clone = tx.clone();
         ctrlc::set_handler(move || {
@@ -63,8 +63,8 @@ impl SignalHandler {
     /// Install Unix-specific signal handlers
     #[cfg(unix)]
     async fn install_unix_signals(&self, tx: broadcast::Sender<Signal>) -> Result<(), ServerError> {
-        use tokio::signal::unix::{signal, SignalKind};
-        
+        use tokio::signal::unix::{SignalKind, signal};
+
         // SIGTERM handler
         let tx_term = tx.clone();
         let mut sigterm = signal(SignalKind::terminate())
@@ -131,16 +131,18 @@ impl Default for SignalHandler {
 /// Wait for shutdown signals
 pub async fn wait_for_shutdown() -> Signal {
     let handler = SignalHandler::new();
-    
+
     if let Err(e) = handler.install().await {
         warn!("Failed to install signal handlers: {}", e);
         // Fallback to basic Ctrl+C handling
-        tokio::signal::ctrl_c().await.expect("Failed to listen for ctrl_c");
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to listen for ctrl_c");
         return Signal::Interrupt;
     }
 
     let mut rx = handler.subscribe();
-    
+
     match rx.recv().await {
         Ok(signal) => {
             info!("Received shutdown signal: {:?}", signal);

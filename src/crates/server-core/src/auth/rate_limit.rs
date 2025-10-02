@@ -125,7 +125,7 @@ impl RateLimiter {
         // Check if window has expired
         let window_duration = Duration::from_secs(self.config.window_secs);
         let elapsed = state.window_start.elapsed();
-        
+
         if elapsed > window_duration {
             // Reset window
             state.reset_window();
@@ -167,7 +167,10 @@ impl RateLimiter {
             state.reset_window();
             state.locked_until = None;
             state.lockout_count = 0;
-            info!("Rate limit reset for client {} after successful auth", client_id);
+            info!(
+                "Rate limit reset for client {} after successful auth",
+                client_id
+            );
         }
     }
 

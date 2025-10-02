@@ -1,15 +1,17 @@
 //! Configuration validation tests
-//! 
+//!
 //! Tests configuration parsing, validation logic, default values,
 //! error handling, and security utilities.
 //!
 //! Requirements: Validate configuration structures from config/src/server.rs
 
+use norc_config::security::{
+    format_fingerprint, parse_pin, validate_pinning_config, validate_tls_config,
+};
 use norc_config::server::{
     CertificatePinningConfig, OcspStaplingConfig, RevocationCheckConfig, SecurityConfig,
     TlsSecurityConfig,
 };
-use norc_config::security::{format_fingerprint, parse_pin, validate_pinning_config, validate_tls_config};
 use std::path::PathBuf;
 
 // ============================================================================
@@ -19,19 +21,34 @@ use std::path::PathBuf;
 #[test]
 fn test_tls_security_config_defaults() {
     let config = TlsSecurityConfig::default();
-    
-    assert!(config.require_mutual_tls, "Mutual TLS should be required by default");
-    assert!(config.trusted_ca_certs.is_empty(), "No trusted CAs by default");
+
+    assert!(
+        config.require_mutual_tls,
+        "Mutual TLS should be required by default"
+    );
+    assert!(
+        config.trusted_ca_certs.is_empty(),
+        "No trusted CAs by default"
+    );
     assert_eq!(config.min_tls_version, "1.3", "Should default to TLS 1.3");
-    assert!(config.allowed_cipher_suites.is_empty(), "Use secure defaults");
-    assert!(config.enable_session_resumption, "Session resumption enabled by default");
-    assert_eq!(config.session_ticket_rotation_secs, 86400, "24-hour ticket rotation");
+    assert!(
+        config.allowed_cipher_suites.is_empty(),
+        "Use secure defaults"
+    );
+    assert!(
+        config.enable_session_resumption,
+        "Session resumption enabled by default"
+    );
+    assert_eq!(
+        config.session_ticket_rotation_secs, 86400,
+        "24-hour ticket rotation"
+    );
 }
 
 #[test]
 fn test_certificate_pinning_config_defaults() {
     let config = CertificatePinningConfig::default();
-    
+
     assert!(!config.enabled, "Pinning disabled by default");
     assert_eq!(config.mode, "strict", "Should default to strict mode");
     assert!(config.pins.is_empty(), "No pins by default");
@@ -45,11 +62,15 @@ fn test_certificate_pinning_config_defaults() {
 #[test]
 fn test_revocation_check_config_defaults() {
     let config = RevocationCheckConfig::default();
-    
+
     assert!(config.enable_ocsp, "OCSP enabled by default");
     assert!(config.enable_crl, "CRL enabled by default");
     assert_eq!(config.timeout_secs, 10, "10-second timeout");
-    assert_eq!(config.max_crl_size_bytes, 10 * 1024 * 1024, "10 MB max CRL size");
+    assert_eq!(
+        config.max_crl_size_bytes,
+        10 * 1024 * 1024,
+        "10 MB max CRL size"
+    );
     assert!(!config.fail_on_unknown, "Fail-open by default");
     assert_eq!(config.ocsp_cache_duration_secs, 3600, "1-hour OCSP cache");
     assert_eq!(config.crl_cache_duration_secs, 86400, "24-hour CRL cache");
@@ -58,10 +79,13 @@ fn test_revocation_check_config_defaults() {
 #[test]
 fn test_ocsp_stapling_config_defaults() {
     let config = OcspStaplingConfig::default();
-    
+
     assert!(!config.enabled, "OCSP stapling disabled by default");
     assert!(config.responder_url.is_none(), "No responder URL override");
-    assert_eq!(config.refresh_before_expiry_secs, 3600, "Refresh 1 hour before expiry");
+    assert_eq!(
+        config.refresh_before_expiry_secs, 3600,
+        "Refresh 1 hour before expiry"
+    );
 }
 
 // ============================================================================
@@ -79,7 +103,7 @@ fn test_create_tls_config_with_mutual_tls() {
         enable_session_resumption: true,
         session_ticket_rotation_secs: 86400,
     };
-    
+
     assert!(config.require_mutual_tls);
     assert_eq!(config.trusted_ca_certs.len(), 1);
 }
@@ -96,7 +120,7 @@ fn test_create_pinning_config_enabled() {
         backup_pins: vec![],
         max_pin_age_days: 90,
     };
-    
+
     assert!(config.enabled);
     assert_eq!(config.mode, "strict");
     assert_eq!(config.pins.len(), 1);
@@ -115,7 +139,7 @@ fn test_create_revocation_config_custom() {
         crl_cache_duration_secs: 43200,
         ocsp_stapling: OcspStaplingConfig::default(),
     };
-    
+
     assert!(config.enable_ocsp);
     assert!(!config.enable_crl);
     assert_eq!(config.timeout_secs, 5);
@@ -130,7 +154,7 @@ fn test_create_revocation_config_custom() {
 fn test_parse_pin_with_sha256_prefix() {
     let pin = "sha256:ABCD1234EFEF5678";
     let result = parse_pin(pin).expect("Should parse pin");
-    
+
     assert_eq!(result, hex::decode("ABCD1234EFEF5678").unwrap());
 }
 
@@ -138,7 +162,7 @@ fn test_parse_pin_with_sha256_prefix() {
 fn test_parse_pin_without_prefix() {
     let pin = "DEADBEEF";
     let result = parse_pin(pin).expect("Should parse pin");
-    
+
     assert_eq!(result, hex::decode("DEADBEEF").unwrap());
 }
 
@@ -146,7 +170,7 @@ fn test_parse_pin_without_prefix() {
 fn test_parse_pin_with_colons() {
     let pin = "AB:CD:EF:12:34";
     let result = parse_pin(pin).expect("Should parse pin with colons");
-    
+
     assert_eq!(result, hex::decode("ABCDEF1234").unwrap());
 }
 
@@ -154,7 +178,7 @@ fn test_parse_pin_with_colons() {
 fn test_parse_pin_with_spaces() {
     let pin = "AB CD EF 12";
     let result = parse_pin(pin).expect("Should parse pin with spaces");
-    
+
     assert_eq!(result, hex::decode("ABCDEF12").unwrap());
 }
 
@@ -162,7 +186,7 @@ fn test_parse_pin_with_spaces() {
 fn test_parse_pin_invalid_hex() {
     let pin = "GHIJKLMN";
     let result = parse_pin(pin);
-    
+
     assert!(result.is_err(), "Should fail with invalid hex");
 }
 
@@ -170,7 +194,7 @@ fn test_parse_pin_invalid_hex() {
 fn test_parse_pin_empty() {
     let pin = "";
     let result = parse_pin(pin);
-    
+
     // Empty string is valid hex (empty vec)
     assert!(result.is_ok());
     assert!(result.unwrap().is_empty());
@@ -184,7 +208,7 @@ fn test_parse_pin_empty() {
 fn test_format_fingerprint_basic() {
     let fingerprint = vec![0xAB, 0xCD, 0xEF, 0x12];
     let formatted = format_fingerprint(&fingerprint);
-    
+
     assert_eq!(formatted, "AB:CD:EF:12");
 }
 
@@ -192,7 +216,7 @@ fn test_format_fingerprint_basic() {
 fn test_format_fingerprint_empty() {
     let fingerprint = vec![];
     let formatted = format_fingerprint(&fingerprint);
-    
+
     assert_eq!(formatted, "");
 }
 
@@ -200,7 +224,7 @@ fn test_format_fingerprint_empty() {
 fn test_format_fingerprint_single_byte() {
     let fingerprint = vec![0xFF];
     let formatted = format_fingerprint(&fingerprint);
-    
+
     assert_eq!(formatted, "FF");
 }
 
@@ -209,7 +233,7 @@ fn test_format_fingerprint_sha256_length() {
     // SHA-256 is 32 bytes = 64 hex chars + 31 colons
     let fingerprint = vec![0u8; 32];
     let formatted = format_fingerprint(&fingerprint);
-    
+
     assert_eq!(formatted.len(), 32 * 2 + 31, "Should be 95 characters");
     assert_eq!(formatted.matches(':').count(), 31, "Should have 31 colons");
 }
@@ -229,7 +253,7 @@ fn test_validate_tls_config_valid_13() {
         enable_session_resumption: true,
         session_ticket_rotation_secs: 86400,
     };
-    
+
     let result = validate_tls_config(&config);
     assert!(result.is_ok(), "TLS 1.3 should be valid");
 }
@@ -245,7 +269,7 @@ fn test_validate_tls_config_valid_12() {
         enable_session_resumption: true,
         session_ticket_rotation_secs: 86400,
     };
-    
+
     let result = validate_tls_config(&config);
     assert!(result.is_ok(), "TLS 1.2 should be valid");
 }
@@ -261,7 +285,7 @@ fn test_validate_tls_config_invalid_version() {
         enable_session_resumption: true,
         session_ticket_rotation_secs: 86400,
     };
-    
+
     let result = validate_tls_config(&config);
     assert!(result.is_err(), "TLS 1.1 should be invalid");
     assert!(result.unwrap_err().contains("Invalid TLS version"));
@@ -278,7 +302,7 @@ fn test_validate_tls_config_invalid_version_string() {
         enable_session_resumption: true,
         session_ticket_rotation_secs: 86400,
     };
-    
+
     let result = validate_tls_config(&config);
     assert!(result.is_err(), "TLS 2.0 should be invalid");
 }
@@ -299,7 +323,7 @@ fn test_validate_pinning_config_disabled() {
         backup_pins: vec![],
         max_pin_age_days: 0,
     };
-    
+
     let result = validate_pinning_config(&config);
     assert!(result.is_ok(), "Disabled pinning config should be valid");
 }
@@ -316,7 +340,7 @@ fn test_validate_pinning_config_enabled_with_pins() {
         backup_pins: vec![],
         max_pin_age_days: 0,
     };
-    
+
     let result = validate_pinning_config(&config);
     assert!(result.is_ok(), "Enabled pinning with pins should be valid");
 }
@@ -333,9 +357,12 @@ fn test_validate_pinning_config_enabled_without_pins() {
         backup_pins: vec![],
         max_pin_age_days: 0,
     };
-    
+
     let result = validate_pinning_config(&config);
-    assert!(result.is_err(), "Enabled pinning without pins should be invalid");
+    assert!(
+        result.is_err(),
+        "Enabled pinning without pins should be invalid"
+    );
 }
 
 #[test]
@@ -350,7 +377,7 @@ fn test_validate_pinning_config_invalid_mode() {
         backup_pins: vec![],
         max_pin_age_days: 0,
     };
-    
+
     let result = validate_pinning_config(&config);
     assert!(result.is_err(), "Invalid pinning mode should be rejected");
     assert!(result.unwrap_err().contains("mode"));
@@ -368,7 +395,7 @@ fn test_validate_pinning_config_relaxed_mode() {
         backup_pins: vec![],
         max_pin_age_days: 0,
     };
-    
+
     let result = validate_pinning_config(&config);
     assert!(result.is_ok(), "Relaxed mode should be valid");
 }
@@ -389,7 +416,7 @@ fn test_revocation_config_both_disabled() {
         crl_cache_duration_secs: 86400,
         ocsp_stapling: OcspStaplingConfig::default(),
     };
-    
+
     // Both disabled is allowed (revocation checking off)
     assert!(!config.enable_ocsp);
     assert!(!config.enable_crl);
@@ -407,7 +434,7 @@ fn test_revocation_config_ocsp_only() {
         crl_cache_duration_secs: 86400,
         ocsp_stapling: OcspStaplingConfig::default(),
     };
-    
+
     assert!(config.enable_ocsp);
     assert!(!config.enable_crl);
 }
@@ -424,7 +451,7 @@ fn test_revocation_config_crl_only() {
         crl_cache_duration_secs: 86400,
         ocsp_stapling: OcspStaplingConfig::default(),
     };
-    
+
     assert!(!config.enable_ocsp);
     assert!(config.enable_crl);
 }
@@ -441,7 +468,7 @@ fn test_revocation_config_reasonable_timeout() {
         crl_cache_duration_secs: 86400,
         ocsp_stapling: OcspStaplingConfig::default(),
     };
-    
+
     assert_eq!(config.timeout_secs, 1, "1-second timeout should be allowed");
 }
 
@@ -457,7 +484,7 @@ fn test_revocation_config_large_crl_size() {
         crl_cache_duration_secs: 86400,
         ocsp_stapling: OcspStaplingConfig::default(),
     };
-    
+
     assert_eq!(config.max_crl_size_bytes, 100 * 1024 * 1024);
 }
 
@@ -477,7 +504,7 @@ fn test_security_config_creation() {
         tls: TlsSecurityConfig::default(),
         revocation: RevocationCheckConfig::default(),
     };
-    
+
     assert_eq!(config.organization_id, "test.org");
     assert_eq!(config.default_trust_level, "Basic");
     assert!(config.strict_cert_validation);
@@ -495,8 +522,11 @@ fn test_security_config_with_pq_crypto() {
         tls: TlsSecurityConfig::default(),
         revocation: RevocationCheckConfig::default(),
     };
-    
-    assert!(config.enable_pq_crypto, "Post-quantum crypto should be enabled");
+
+    assert!(
+        config.enable_pq_crypto,
+        "Post-quantum crypto should be enabled"
+    );
 }
 
 #[test]
@@ -511,7 +541,7 @@ fn test_security_config_with_hsm() {
         tls: TlsSecurityConfig::default(),
         revocation: RevocationCheckConfig::default(),
     };
-    
+
     assert!(config.enable_hsm, "HSM should be enabled");
 }
 
@@ -531,7 +561,7 @@ fn test_zero_timeout_revocation_config() {
         crl_cache_duration_secs: 86400,
         ocsp_stapling: OcspStaplingConfig::default(),
     };
-    
+
     // Zero timeout is allowed (might mean instant fail or no timeout)
     assert_eq!(config.timeout_secs, 0);
 }
@@ -548,7 +578,7 @@ fn test_zero_cache_duration() {
         crl_cache_duration_secs: 0,
         ocsp_stapling: OcspStaplingConfig::default(),
     };
-    
+
     // Zero cache duration means no caching
     assert_eq!(config.ocsp_cache_duration_secs, 0);
     assert_eq!(config.crl_cache_duration_secs, 0);
@@ -565,7 +595,7 @@ fn test_empty_trusted_ca_list() {
         enable_session_resumption: true,
         session_ticket_rotation_secs: 86400,
     };
-    
+
     // Empty CA list is allowed (might use system roots or no verification)
     assert!(config.trusted_ca_certs.is_empty());
 }
@@ -576,7 +606,7 @@ fn test_very_long_pin_list() {
     for i in 0..1000 {
         pins.push(format!("sha256:{:064x}", i));
     }
-    
+
     let config = CertificatePinningConfig {
         enabled: true,
         mode: "strict".to_string(),
@@ -587,7 +617,7 @@ fn test_very_long_pin_list() {
         backup_pins: vec![],
         max_pin_age_days: 0,
     };
-    
+
     assert_eq!(config.pins.len(), 1000, "Should support many pins");
 }
 
@@ -603,7 +633,7 @@ fn test_backup_pins_without_primary() {
         backup_pins: vec!["sha256:BACKUP".to_string()],
         max_pin_age_days: 0,
     };
-    
+
     // Backup pins without primary pins (should be caught by validation)
     assert!(config.pins.is_empty());
     assert!(!config.backup_pins.is_empty());

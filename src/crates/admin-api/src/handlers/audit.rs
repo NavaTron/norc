@@ -1,7 +1,10 @@
 //! Audit log query handlers
 
 use crate::{auth::AuthContext, models::*, rbac::Permission, AdminApiState, ApiResult};
-use axum::{extract::{Query, State}, Extension, Json};
+use axum::{
+    extract::{Query, State},
+    Extension, Json,
+};
 
 /// Query audit logs
 pub async fn query_audit_logs(

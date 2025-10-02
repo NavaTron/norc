@@ -8,17 +8,17 @@
 
 pub mod device_auth;
 pub mod federation_auth;
-pub mod session;
-pub mod rbac;
-pub mod rate_limit;
 pub mod protocol;
+pub mod rate_limit;
+pub mod rbac;
+pub mod session;
 
 pub use device_auth::{DeviceAuthenticator, DeviceCredentials};
 pub use federation_auth::{FederationAuthenticator, FederationCredentials};
-pub use session::{Session, SessionManager, SessionToken};
-pub use rbac::{Permission, Role, AccessControl};
-pub use rate_limit::{RateLimiter, RateLimitConfig};
 pub use protocol::AuthProtocolHandler;
+pub use rate_limit::{RateLimitConfig, RateLimiter};
+pub use rbac::{AccessControl, Permission, Role};
+pub use session::{Session, SessionManager, SessionToken};
 
 use crate::ServerError;
 use norc_protocol::types::DeviceId;
@@ -116,10 +116,9 @@ impl AuthenticationManager {
 
         // Create session
         let mut session_mgr = self.session_manager.write().await;
-        let session = session_mgr.create_session(
-            auth_result.device_id.clone(),
-            auth_result.role.clone(),
-        ).await?;
+        let session = session_mgr
+            .create_session(auth_result.device_id.clone(), auth_result.role.clone())
+            .await?;
 
         Ok(AuthResult {
             device_id: auth_result.device_id,

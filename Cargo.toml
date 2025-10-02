@@ -11,7 +11,8 @@ members = [
     "src/crates/cli",
     "src/crates/config",
     "src/client",
-    "src/server"
+    "src/server",
+    "benches"
 ]
 
 [workspace.package]
@@ -24,4 +25,7 @@ repository = "https://github.com/navatron/norc"
 homepage = "https://navatron.com"
 description = "NavaTron Open Real-time Communication Protocol"
 keywords = ["chat", "protocol", "encryption", "federation"]
+
+[workspace.dependencies]
+criterion = "0.5"
 

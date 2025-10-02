@@ -10,16 +10,16 @@ use std::collections::HashSet;
 pub enum Role {
     /// Super administrator - full access to all operations
     SuperAdmin,
-    
+
     /// Organization administrator - manage users and devices within organization
     OrgAdmin,
-    
+
     /// Auditor - read-only access to audit logs and compliance reports
     Auditor,
-    
+
     /// Operator - server operations and monitoring (no user management)
     Operator,
-    
+
     /// Federation manager - manage federation partnerships
     FederationManager,
 }
@@ -33,50 +33,50 @@ pub enum Permission {
     UserUpdate,
     UserDelete,
     UserBulkOps,
-    
+
     // Device management
     DeviceRegister,
     DeviceRead,
     DeviceRevoke,
     DeviceBulkOps,
-    
+
     // Configuration management
     ConfigRead,
     ConfigUpdate,
     ConfigRollback,
     ConfigValidate,
-    
+
     // Server operations
     ServerStart,
     ServerStop,
     ServerReload,
     ServerStatus,
-    
+
     // Monitoring
     MetricsRead,
     HealthCheck,
     LogsRead,
-    
+
     // Federation
     FederationCreate,
     FederationRead,
     FederationUpdate,
     FederationDelete,
-    
+
     // Audit
     AuditRead,
     AuditExport,
     ComplianceReport,
-    
+
     // API key management
     ApiKeyCreate,
     ApiKeyRead,
     ApiKeyRevoke,
-    
+
     // Connection management
     ConnectionsRead,
     ConnectionsManage,
-    
+
     // Session management
     SessionsRead,
     SessionsManage,
@@ -86,71 +86,128 @@ impl Role {
     /// Get all permissions for this role
     pub fn permissions(&self) -> HashSet<Permission> {
         use Permission::*;
-        
+
         match self {
             Role::SuperAdmin => {
                 // SuperAdmin has all permissions
                 vec![
-                    UserCreate, UserRead, UserUpdate, UserDelete, UserBulkOps,
-                    DeviceRegister, DeviceRead, DeviceRevoke, DeviceBulkOps,
-                    ConfigRead, ConfigUpdate, ConfigRollback, ConfigValidate,
-                    ServerStart, ServerStop, ServerReload, ServerStatus,
-                    MetricsRead, HealthCheck, LogsRead,
-                    FederationCreate, FederationRead, FederationUpdate, FederationDelete,
-                    AuditRead, AuditExport, ComplianceReport,
-                    ApiKeyCreate, ApiKeyRead, ApiKeyRevoke,
-                    ConnectionsRead, ConnectionsManage,
-                    SessionsRead, SessionsManage,
-                ].into_iter().collect()
+                    UserCreate,
+                    UserRead,
+                    UserUpdate,
+                    UserDelete,
+                    UserBulkOps,
+                    DeviceRegister,
+                    DeviceRead,
+                    DeviceRevoke,
+                    DeviceBulkOps,
+                    ConfigRead,
+                    ConfigUpdate,
+                    ConfigRollback,
+                    ConfigValidate,
+                    ServerStart,
+                    ServerStop,
+                    ServerReload,
+                    ServerStatus,
+                    MetricsRead,
+                    HealthCheck,
+                    LogsRead,
+                    FederationCreate,
+                    FederationRead,
+                    FederationUpdate,
+                    FederationDelete,
+                    AuditRead,
+                    AuditExport,
+                    ComplianceReport,
+                    ApiKeyCreate,
+                    ApiKeyRead,
+                    ApiKeyRevoke,
+                    ConnectionsRead,
+                    ConnectionsManage,
+                    SessionsRead,
+                    SessionsManage,
+                ]
+                .into_iter()
+                .collect()
             }
-            
+
             Role::OrgAdmin => {
                 // OrgAdmin can manage users and devices
                 vec![
-                    UserCreate, UserRead, UserUpdate, UserDelete, UserBulkOps,
-                    DeviceRegister, DeviceRead, DeviceRevoke, DeviceBulkOps,
+                    UserCreate,
+                    UserRead,
+                    UserUpdate,
+                    UserDelete,
+                    UserBulkOps,
+                    DeviceRegister,
+                    DeviceRead,
+                    DeviceRevoke,
+                    DeviceBulkOps,
                     ConfigRead,
-                    MetricsRead, HealthCheck,
+                    MetricsRead,
+                    HealthCheck,
                     AuditRead,
-                ].into_iter().collect()
+                ]
+                .into_iter()
+                .collect()
             }
-            
+
             Role::Auditor => {
                 // Auditor has read-only access to audit and compliance
                 vec![
                     UserRead,
                     DeviceRead,
                     ConfigRead,
-                    MetricsRead, HealthCheck, LogsRead,
+                    MetricsRead,
+                    HealthCheck,
+                    LogsRead,
                     FederationRead,
-                    AuditRead, AuditExport, ComplianceReport,
-                ].into_iter().collect()
+                    AuditRead,
+                    AuditExport,
+                    ComplianceReport,
+                ]
+                .into_iter()
+                .collect()
             }
-            
+
             Role::Operator => {
                 // Operator manages server operations
                 vec![
-                    ServerStart, ServerStop, ServerReload, ServerStatus,
-                    MetricsRead, HealthCheck, LogsRead,
+                    ServerStart,
+                    ServerStop,
+                    ServerReload,
+                    ServerStatus,
+                    MetricsRead,
+                    HealthCheck,
+                    LogsRead,
                     ConfigRead,
                     AuditRead,
-                    ConnectionsRead, ConnectionsManage,
-                    SessionsRead, SessionsManage,
-                ].into_iter().collect()
+                    ConnectionsRead,
+                    ConnectionsManage,
+                    SessionsRead,
+                    SessionsManage,
+                ]
+                .into_iter()
+                .collect()
             }
-            
+
             Role::FederationManager => {
                 // FederationManager manages federation partnerships
                 vec![
-                    FederationCreate, FederationRead, FederationUpdate, FederationDelete,
+                    FederationCreate,
+                    FederationRead,
+                    FederationUpdate,
+                    FederationDelete,
                     ConfigRead,
-                    MetricsRead, HealthCheck,
+                    MetricsRead,
+                    HealthCheck,
                     AuditRead,
-                ].into_iter().collect()
+                ]
+                .into_iter()
+                .collect()
             }
         }
     }
-    
+
     /// Check if role has a specific permission
     pub fn has_permission(&self, permission: Permission) -> bool {
         self.permissions().contains(&permission)

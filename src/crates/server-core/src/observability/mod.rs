@@ -34,7 +34,7 @@ impl ObservabilitySystem {
     pub async fn init(config: &ObservabilityConfig) -> Result<Self, ServerError> {
         // Initialize logging first so we can log subsequent initialization
         let logger = Logger::init(config)?;
-        
+
         eprintln!("Initializing observability system");
 
         // Initialize metrics
@@ -43,18 +43,18 @@ impl ObservabilitySystem {
 
         // Initialize health checker
         let health = HealthChecker::new();
-        
+
         // Register core components for health monitoring
         health.register_component("transport".to_string()).await;
         health.register_component("federation".to_string()).await;
         health.register_component("crypto".to_string()).await;
         health.register_component("database".to_string()).await;
-        
+
         eprintln!("Health check system initialized");
 
         // Initialize distributed tracing
         let tracer = Tracer::init(config)?;
-        
+
         eprintln!("Observability system fully initialized");
 
         Ok(Self {
@@ -88,10 +88,10 @@ impl ObservabilitySystem {
     /// Shutdown observability system gracefully
     pub async fn shutdown(self) {
         eprintln!("Shutting down observability system");
-        
+
         // Shutdown tracing
         self.tracer.shutdown().await;
-        
+
         // Final log message
         eprintln!("Observability system shutdown complete");
     }

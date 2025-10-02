@@ -1,0 +1,56 @@
+# Multi-stage build for NORC Server
+# Optimized for size and security
+
+# Build stage
+FROM rust:1.90-slim as builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy workspace files
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY src/ ./src/
+
+# Build release binary
+RUN cargo build --release --bin norc-server
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -u 1000 -s /bin/bash norc
+
+# Create directories
+RUN mkdir -p /etc/norc /var/lib/norc /var/log/norc && \
+    chown -R norc:norc /etc/norc /var/lib/norc /var/log/norc
+
+# Copy binary from builder
+COPY --from=builder /build/target/release/norc-server /usr/local/bin/
+
+# Switch to non-root user
+USER norc
+
+# Expose ports
+EXPOSE 8080 8443
+
+# Set working directory
+WORKDIR /home/norc
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["/usr/local/bin/norc-server", "health"] || exit 1
+
+# Run server
+ENTRYPOINT ["/usr/local/bin/norc-server"]
+CMD ["--config", "/etc/norc/config.toml"]

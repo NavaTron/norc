@@ -110,14 +110,13 @@ impl HandshakeState {
 
     /// Complete handshake and derive session keys
     pub fn finalize(&mut self) -> Result<SessionKeys> {
-        let ephemeral_keypair = self
-            .ephemeral_keypair
-            .take()
-            .ok_or_else(|| ProtocolError::HandshakeError("Missing ephemeral keypair".to_string()))?;
+        let ephemeral_keypair = self.ephemeral_keypair.take().ok_or_else(|| {
+            ProtocolError::HandshakeError("Missing ephemeral keypair".to_string())
+        })?;
 
-        let peer_ephemeral_public = self
-            .peer_ephemeral_public
-            .ok_or_else(|| ProtocolError::HandshakeError("Missing peer ephemeral public key".to_string()))?;
+        let peer_ephemeral_public = self.peer_ephemeral_public.ok_or_else(|| {
+            ProtocolError::HandshakeError("Missing peer ephemeral public key".to_string())
+        })?;
 
         let peer_nonce = self
             .peer_nonce
@@ -137,11 +136,8 @@ impl HandshakeState {
         }
 
         // Derive master secret
-        let master_secret = HkdfBlake3::derive_32(
-            shared_secret.as_bytes(),
-            &combined_nonce,
-            "norc:ms:v1",
-        )?;
+        let master_secret =
+            HkdfBlake3::derive_32(shared_secret.as_bytes(), &combined_nonce, "norc:ms:v1")?;
 
         // Derive directional traffic keys
         let key_c2s = HkdfBlake3::derive_32(&master_secret, &[0], "norc:tk:c2s:v1")?;
@@ -199,7 +195,7 @@ mod tests {
             server_keys.server_to_client.as_bytes(),
             "Server-to-client keys should match"
         );
-        
+
         // Keys should be different from each other
         assert_ne!(
             client_keys.client_to_server.as_bytes(),
@@ -212,12 +208,12 @@ mod tests {
     fn test_handshake_version_negotiation() {
         let mut client = HandshakeState::new_client();
         let client_hello = client.generate_client_hello().unwrap();
-        
+
         assert!(client_hello.versions.contains(&ProtocolVersion::CURRENT));
-        
+
         let mut server = HandshakeState::new_server();
         let server_hello = server.process_client_hello(&client_hello).unwrap();
-        
+
         assert_eq!(server_hello.selected_version, ProtocolVersion::CURRENT);
     }
 
@@ -225,7 +221,7 @@ mod tests {
     fn test_handshake_nonce_uniqueness() {
         let client1 = HandshakeState::new_client();
         let client2 = HandshakeState::new_client();
-        
+
         // Nonces should be unique (with overwhelming probability)
         assert_ne!(client1.our_nonce, client2.our_nonce);
     }

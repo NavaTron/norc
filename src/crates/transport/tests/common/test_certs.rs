@@ -2,9 +2,9 @@
 ///
 /// This module provides utilities for generating various types of test certificates
 /// to validate certificate handling, validation, and pinning functionality.
-
 use rcgen::{
-    BasicConstraints, Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
+    BasicConstraints, Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa,
+    KeyPair, KeyUsagePurpose, SanType,
 };
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::time::Duration;
@@ -48,11 +48,11 @@ impl TestCertBuilder {
     /// Create a new certificate builder with default parameters
     pub fn new() -> Self {
         let mut params = CertificateParams::default();
-        
+
         // Default validity: 30 days
         params.not_before = OffsetDateTime::now_utc();
         params.not_after = OffsetDateTime::now_utc() + Duration::from_secs(30 * 24 * 3600);
-        
+
         Self {
             params,
             key_pair: None,
@@ -108,9 +108,7 @@ impl TestCertBuilder {
     /// Make this a CA certificate
     pub fn ca(mut self) -> Self {
         self.params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-        self.params
-            .key_usages
-            .push(KeyUsagePurpose::KeyCertSign);
+        self.params.key_usages.push(KeyUsagePurpose::KeyCertSign);
         self.params.key_usages.push(KeyUsagePurpose::CrlSign);
         self
     }
@@ -121,7 +119,9 @@ impl TestCertBuilder {
         self.params
             .key_usages
             .push(KeyUsagePurpose::DigitalSignature);
-        self.params.key_usages.push(KeyUsagePurpose::KeyEncipherment);
+        self.params
+            .key_usages
+            .push(KeyUsagePurpose::KeyEncipherment);
         self.params
             .extended_key_usages
             .push(ExtendedKeyUsagePurpose::ServerAuth);
@@ -185,11 +185,11 @@ impl TestCertBuilder {
     /// Build the certificate
     pub fn build(self) -> anyhow::Result<TestCertBundle> {
         // Generate or use provided key pair
-        let key_pair = self.key_pair.unwrap_or_else(|| {
-            KeyPair::generate().expect("Failed to generate key pair")
-        });
+        let key_pair = self
+            .key_pair
+            .unwrap_or_else(|| KeyPair::generate().expect("Failed to generate key pair"));
 
-        // rcgen 0.13 API: Create self-signed certificate  
+        // rcgen 0.13 API: Create self-signed certificate
         let certificate = self.params.self_signed(&key_pair)?;
 
         let cert_der = certificate.der().to_vec();
@@ -301,10 +301,11 @@ pub fn create_invalid_key_usage_cert(org_name: &str) -> anyhow::Result<TestCertB
     params
         .distinguished_name
         .push(DnType::OrganizationName, org_name.to_string());
-    params
-        .distinguished_name
-        .push(DnType::CommonName, "invalid-key-usage.example.com".to_string());
-    
+    params.distinguished_name.push(
+        DnType::CommonName,
+        "invalid-key-usage.example.com".to_string(),
+    );
+
     // CA basic constraints but with client auth
     params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
     params.key_usages.push(KeyUsagePurpose::KeyCertSign);
@@ -340,7 +341,7 @@ pub fn create_cert_chain(
 ) -> anyhow::Result<(TestCertBundle, TestCertBundle, TestCertBundle)> {
     let root_ca = create_root_ca(org_name)?;
     let intermediate_ca = create_intermediate_ca(org_name, &root_ca)?;
-    
+
     let end_entity = if is_server {
         create_server_cert(org_name, "server.example.com", Some(&intermediate_ca))?
     } else {
@@ -415,7 +416,7 @@ mod tests {
     fn test_write_to_temp_files() {
         let ca = create_root_ca("TestOrg").unwrap();
         let (cert_file, key_file) = write_cert_to_temp_files(&ca).unwrap();
-        
+
         assert!(cert_file.path().exists());
         assert!(key_file.path().exists());
     }

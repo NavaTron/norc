@@ -54,7 +54,7 @@ impl DeviceAuthenticator {
     ) -> Result<DeviceAuthResult, ServerError> {
         // Convert DeviceId to string (hex representation)
         let device_id_str = hex::encode(credentials.device_id.as_bytes());
-        
+
         // Step 1: Retrieve device from database
         let device = self
             .device_repo
@@ -85,9 +85,7 @@ impl DeviceAuthenticator {
                 "Device authentication failed: public key mismatch: {:?}",
                 credentials.device_id
             );
-            return Err(ServerError::Unauthorized(
-                "Public key mismatch".to_string(),
-            ));
+            return Err(ServerError::Unauthorized("Public key mismatch".to_string()));
         }
 
         // Step 4: Verify signature on challenge nonce
@@ -113,18 +111,22 @@ impl DeviceAuthenticator {
     }
 
     /// Verify the challenge signature
-    fn verify_challenge_signature(&self, credentials: &DeviceCredentials) -> Result<(), ServerError> {
+    fn verify_challenge_signature(
+        &self,
+        credentials: &DeviceCredentials,
+    ) -> Result<(), ServerError> {
         // Reconstruct the challenge message
-        let challenge_message = self.build_challenge_message(&credentials.device_id, &credentials.nonce);
+        let challenge_message =
+            self.build_challenge_message(&credentials.device_id, &credentials.nonce);
 
         // Verify signature using Ed25519
         use ed25519_dalek::{Signature as Ed25519Sig, Verifier, VerifyingKey};
-        
+
         let verifying_key = VerifyingKey::from_bytes(credentials.public_key.as_bytes())
             .map_err(|e| ServerError::CryptoError(format!("Invalid public key: {}", e)))?;
 
         let signature = Ed25519Sig::from_bytes(credentials.signature.as_bytes());
-        
+
         verifying_key
             .verify(&challenge_message, &signature)
             .map_err(|e| {
@@ -146,7 +148,10 @@ impl DeviceAuthenticator {
     }
 
     /// Determine role based on device properties
-    async fn determine_role(&self, device: &norc_persistence::models::Device) -> Result<super::Role, ServerError> {
+    async fn determine_role(
+        &self,
+        device: &norc_persistence::models::Device,
+    ) -> Result<super::Role, ServerError> {
         // For now, all authenticated devices get the "User" role
         // In a full implementation, this would check device properties,
         // user roles, organization policies, etc.
@@ -162,10 +167,10 @@ impl DeviceAuthenticator {
         use rand::RngCore;
         let mut nonce = vec![0u8; 32];
         rand::thread_rng().fill_bytes(&mut nonce);
-        
+
         // Store nonce with timestamp for validation
         // TODO: Implement nonce storage with expiration
-        
+
         nonce
     }
 
@@ -178,7 +183,7 @@ impl DeviceAuthenticator {
         device_name: String,
     ) -> Result<(), ServerError> {
         let device_id_str = hex::encode(device_id.as_bytes());
-        
+
         self.device_repo
             .create(
                 &device_id_str,
@@ -197,7 +202,7 @@ impl DeviceAuthenticator {
     /// Revoke a device (admin operation)
     pub async fn revoke_device(&self, device_id: &DeviceId) -> Result<(), ServerError> {
         let device_id_str = hex::encode(device_id.as_bytes());
-        
+
         self.device_repo
             .revoke(&device_id_str)
             .await
@@ -211,7 +216,7 @@ impl DeviceAuthenticator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     fn create_test_device_id() -> DeviceId {
         DeviceId::new([0u8; 32])
     }
@@ -221,7 +226,7 @@ mod tests {
         let device_id = create_test_device_id();
         let public_key = PublicKey([0u8; 32]);
         let signature = Signature([0u8; 64]);
-        
+
         let credentials = DeviceCredentials {
             device_id,
             public_key,
@@ -229,7 +234,7 @@ mod tests {
             nonce: vec![1, 2, 3, 4],
             client_ip: "127.0.0.1".to_string(),
         };
-        
+
         assert_eq!(credentials.nonce.len(), 4);
     }
 }

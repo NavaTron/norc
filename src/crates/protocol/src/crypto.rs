@@ -10,13 +10,13 @@ use crate::error::{ProtocolError, Result};
 use crate::types::*;
 use blake3::Hasher;
 use chacha20poly1305::{
-    aead::{Aead, KeyInit, Payload},
     ChaCha20Poly1305, Key, Nonce as ChaNonce,
+    aead::{Aead, KeyInit, Payload},
 };
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use hkdf::Hkdf;
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use sha2::Sha256;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, SharedSecret};
 

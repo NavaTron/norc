@@ -3,8 +3,8 @@
 //! Implements per-message authorization and access control per SERVER_REQUIREMENTS E-02.
 
 use crate::{
-    auth::{AuthenticationManager, Permission},
     ServerError,
+    auth::{AuthenticationManager, Permission},
 };
 use norc_protocol::messages::EncryptedMessage;
 use std::sync::Arc;
@@ -30,10 +30,7 @@ pub struct AuthorizationMiddleware {
 
 impl AuthorizationMiddleware {
     /// Create a new authorization middleware
-    pub fn new(
-        auth_manager: Arc<AuthenticationManager>,
-        enforce_org_boundaries: bool,
-    ) -> Self {
+    pub fn new(auth_manager: Arc<AuthenticationManager>, enforce_org_boundaries: bool) -> Self {
         Self {
             auth_manager,
             enforce_org_boundaries,
@@ -68,7 +65,7 @@ impl AuthorizationMiddleware {
         // Step 2: Verify sender device ID matches authenticated device
         let sender_id = hex::encode(message.sender.as_bytes());
         let auth_device_id = hex::encode(auth_context.device_id.as_bytes());
-        
+
         if sender_id != auth_device_id {
             warn!(
                 "Device ID mismatch: message from {:?}, authenticated as {:?}",
@@ -214,10 +211,12 @@ impl MessageRateLimiter {
         let now = std::time::Instant::now();
         let mut counters = self.counters.write().await;
 
-        let counter = counters.entry(user_id.to_string()).or_insert(UserMessageCounter {
-            count: 0,
-            window_start: now,
-        });
+        let counter = counters
+            .entry(user_id.to_string())
+            .or_insert(UserMessageCounter {
+                count: 0,
+                window_start: now,
+            });
 
         // Reset counter if window has expired (1 minute)
         if now.duration_since(counter.window_start).as_secs() >= 60 {
@@ -227,7 +226,10 @@ impl MessageRateLimiter {
 
         // Check limit
         if counter.count >= self.messages_per_minute {
-            warn!("Rate limit exceeded for user {}: {} messages/min", user_id, counter.count);
+            warn!(
+                "Rate limit exceeded for user {}: {} messages/min",
+                user_id, counter.count
+            );
             return Err(ServerError::RateLimitExceeded(format!(
                 "Rate limit exceeded: {} messages per minute",
                 self.messages_per_minute
@@ -255,7 +257,7 @@ impl MessageRateLimiter {
     pub async fn cleanup_expired(&self) {
         let now = std::time::Instant::now();
         let mut counters = self.counters.write().await;
-        
+
         counters.retain(|_, counter| {
             now.duration_since(counter.window_start).as_secs() < 120 // Keep for 2 minutes
         });
@@ -271,12 +273,12 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_basic() {
         let limiter = MessageRateLimiter::new(10);
-        
+
         // Should allow first 10 messages
         for _ in 0..10 {
             assert!(limiter.check_rate_limit("user1").await.is_ok());
         }
-        
+
         // 11th message should be denied
         assert!(limiter.check_rate_limit("user1").await.is_err());
     }
@@ -284,13 +286,13 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_different_users() {
         let limiter = MessageRateLimiter::new(5);
-        
+
         // Each user should have independent limits
         for _ in 0..5 {
             assert!(limiter.check_rate_limit("user1").await.is_ok());
             assert!(limiter.check_rate_limit("user2").await.is_ok());
         }
-        
+
         assert!(limiter.check_rate_limit("user1").await.is_err());
         assert!(limiter.check_rate_limit("user2").await.is_err());
     }

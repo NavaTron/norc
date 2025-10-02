@@ -15,8 +15,8 @@ pub fn init_logging(config: &ServerConfig) -> Result<(), ServerError> {
     let level = parse_log_level(&logging_config.log_level)?;
 
     // Create environment filter
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(level.as_str()));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level.as_str()));
 
     // Initialize based on format
     match logging_config.log_format.as_str() {
@@ -25,38 +25,41 @@ pub fn init_logging(config: &ServerConfig) -> Result<(), ServerError> {
                 .with_env_filter(env_filter)
                 .json()
                 .finish();
-            tracing::subscriber::set_global_default(subscriber)
-                .map_err(|e| ServerError::Config(
-                    norc_config::ConfigError::Validation(format!("Failed to set logger: {}", e))
-                ))?;
+            tracing::subscriber::set_global_default(subscriber).map_err(|e| {
+                ServerError::Config(norc_config::ConfigError::Validation(format!(
+                    "Failed to set logger: {}",
+                    e
+                )))
+            })?;
         }
         "pretty" => {
             let subscriber = FmtSubscriber::builder()
                 .with_env_filter(env_filter)
                 .pretty()
                 .finish();
-            tracing::subscriber::set_global_default(subscriber)
-                .map_err(|e| ServerError::Config(
-                    norc_config::ConfigError::Validation(format!("Failed to set logger: {}", e))
-                ))?;
+            tracing::subscriber::set_global_default(subscriber).map_err(|e| {
+                ServerError::Config(norc_config::ConfigError::Validation(format!(
+                    "Failed to set logger: {}",
+                    e
+                )))
+            })?;
         }
         "compact" => {
             let subscriber = FmtSubscriber::builder()
                 .with_env_filter(env_filter)
                 .compact()
                 .finish();
-            tracing::subscriber::set_global_default(subscriber)
-                .map_err(|e| ServerError::Config(
-                    norc_config::ConfigError::Validation(format!("Failed to set logger: {}", e))
-                ))?;
+            tracing::subscriber::set_global_default(subscriber).map_err(|e| {
+                ServerError::Config(norc_config::ConfigError::Validation(format!(
+                    "Failed to set logger: {}",
+                    e
+                )))
+            })?;
         }
         _ => {
-            return Err(ServerError::Config(
-                norc_config::ConfigError::Validation(format!(
-                    "Unknown log format: {}",
-                    logging_config.log_format
-                )),
-            ));
+            return Err(ServerError::Config(norc_config::ConfigError::Validation(
+                format!("Unknown log format: {}", logging_config.log_format),
+            )));
         }
     }
 
@@ -72,8 +75,8 @@ fn parse_log_level(level: &str) -> Result<Level, ServerError> {
         "info" => Ok(Level::INFO),
         "warn" => Ok(Level::WARN),
         "error" => Ok(Level::ERROR),
-        _ => Err(ServerError::Config(
-            norc_config::ConfigError::Validation(format!("Invalid log level: {}", level)),
-        )),
+        _ => Err(ServerError::Config(norc_config::ConfigError::Validation(
+            format!("Invalid log level: {}", level),
+        ))),
     }
 }
