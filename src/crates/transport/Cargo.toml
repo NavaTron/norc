@@ -48,6 +48,9 @@ bytes = "1.7"
 thiserror = "1.0"
 anyhow = "1.0"
 
+# Metrics
+prometheus = { version = "0.13", features = ["process"] }
+
 # Tracing
 tracing = "0.1"
 

@@ -7,6 +7,7 @@
 
 pub mod error;
 pub mod listener;
+pub mod metrics;
 pub mod revocation;
 pub mod rotation_manager;
 pub mod tcp;
@@ -19,6 +20,7 @@ pub mod quic_transport;
 
 pub use error::{Result, TransportError};
 pub use listener::{ListenerConfig, NetworkListener};
+pub use metrics::SecurityMetrics;
 pub use revocation::{RevocationChecker, RevocationConfig, RevocationStatus, RevocationError};
 pub use rotation_manager::{
     CertificateBundle, CertificateRotationManager, RotationConfig as CertRotationConfig,
