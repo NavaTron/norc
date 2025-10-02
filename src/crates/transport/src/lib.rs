@@ -14,6 +14,7 @@ pub mod rotation_manager;
 pub mod tcp;
 pub mod tls;
 pub mod tls_config;
+pub mod tracing_spans;
 pub mod websocket;
 
 #[cfg(feature = "quic")]
