@@ -10,6 +10,7 @@ pub mod audit;
 pub mod api_keys;
 pub mod connections;
 pub mod sessions;
+pub mod certificates;
 
 pub use health::*;
 pub use users::*;
@@ -21,3 +22,4 @@ pub use audit::*;
 pub use api_keys::*;
 pub use connections::*;
 pub use sessions::*;
+pub use certificates::*;

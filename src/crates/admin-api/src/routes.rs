@@ -71,6 +71,13 @@ pub fn build_routes(state: AdminApiState) -> Router {
         .route("/sessions/:id", get(handlers::get_session).delete(handlers::revoke_session))
         .route("/users/:user_id/sessions", delete(handlers::revoke_user_sessions))
         
+        // Certificate management (Week 6, Task 10)
+        .route("/certificates", get(handlers::list_certificates).post(handlers::upload_certificate))
+        .route("/certificates/:fingerprint", get(handlers::get_certificate).delete(handlers::delete_certificate))
+        .route("/certificates/rotate", post(handlers::rotate_certificate))
+        .route("/certificates/check-revocation", post(handlers::check_revocation))
+        .route("/certificates/health", get(handlers::get_certificate_health))
+        
         // Apply authentication and rate limiting middleware
         .layer(middleware::from_fn_with_state(
             rate_limiter.clone(),
