@@ -59,6 +59,8 @@ hex = "0.4"  # Hex encoding for fingerprints
 tempfile = "3.12"
 rcgen = "0.13"  # Certificate generation for tests
 time = "0.3"    # Time handling for certificate validity
+mockito = "1.5" # HTTP server mocking for CRL/OCSP tests
+tokio-test = "0.4"  # Async test utilities
 
 [features]
 default = ["tls", "websocket"]
