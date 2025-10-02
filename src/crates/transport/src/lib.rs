@@ -7,6 +7,7 @@
 
 pub mod error;
 pub mod listener;
+pub mod logging;
 pub mod metrics;
 pub mod revocation;
 pub mod rotation_manager;
